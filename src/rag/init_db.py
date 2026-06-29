@@ -39,7 +39,7 @@ def init_knowledge_base():
         batch = chunks[i:i + batch_size]
         collection.add(
             documents=[c["content"] for c in batch],
-            metadatas=[{"source": c["source"]} for c in batch],
+            metadatas=[{"source": c["source"], "platform": c.get("platform", "generic")} for c in batch],
             ids=[f"chunk-{i+j}" for j in range(len(batch))],
         )
         print(f"  导入 {i+len(batch)}/{len(chunks)}")

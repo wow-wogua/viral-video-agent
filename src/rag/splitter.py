@@ -5,6 +5,7 @@ def split_documents(docs: list[dict], chunk_size: int = 1000, chunk_overlap: int
     for doc in docs:
         content = doc["content"]
         source = doc["source"]
+        platform = doc.get("platform", "generic")
 
         start = 0
         while start < len(content):
@@ -15,6 +16,7 @@ def split_documents(docs: list[dict], chunk_size: int = 1000, chunk_overlap: int
                 chunks.append({
                     "content": chunk_text,
                     "source": source,
+                    "platform": platform,
                 })
 
             start += chunk_size - chunk_overlap
