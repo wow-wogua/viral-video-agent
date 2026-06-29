@@ -31,7 +31,10 @@ def init_knowledge_base():
     # 清空旧数据
     if collection.count() > 0:
         print(f"清空旧数据 ({collection.count()} 条)")
-        collection.delete(where={})
+        # 获取所有 ID 然后删除（ChromaDB 不支持 where={})
+        all_data = collection.get()
+        if all_data["ids"]:
+            collection.delete(ids=all_data["ids"])
 
     # 批量导入
     batch_size = 100
