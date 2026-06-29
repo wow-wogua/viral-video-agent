@@ -10,6 +10,56 @@ from src.prompts.manager import prompt_manager
 
 MAX_SUPERVISOR_ROUNDS = 20
 
+INTENT_CLASSIFY_PROMPT = """你是一个意图分类器。判断用户请求是否需要"短视频爆款分析"。
+
+用户请求: {request}
+
+如果用户请求是关于以下内容，返回 "analyze"：
+- 分析视频/短视频/爆款
+- 搜索/查找视频数据
+- 生成视频分析报告
+- B站/抖音等平台数据分析
+
+其他所有请求返回 "chat"，包括：
+- 闲聊、问候
+- 一般知识问答
+- 创意建议（如标题建议、选题建议）
+- 和视频分析无关的任何请求
+
+只返回 "analyze" 或 "chat"，不要返回其他内容。"""
+
+DIRECT_ANSWER_PROMPT = """你是一个友好的AI助手。请直接回答用户的问题，简洁明了。
+
+用户问题: {request}
+
+直接回答："""
+
+
+async def _classify_intent(user_request: str) -> str:
+    """分类用户意图：analyze（走Agent流程）或 chat（直接回答）。"""
+    try:
+        llm = get_llm()
+        prompt = INTENT_CLASSIFY_PROMPT.format(request=user_request)
+        response = await llm.ainvoke([HumanMessage(content=prompt)])
+        text = extract_text(response).strip().lower()
+        if "analyze" in text:
+            return "analyze"
+        return "chat"
+    except Exception as e:
+        print(f"[Supervisor] 意图分类失败，默认走分析流程: {e}")
+        return "analyze"
+
+
+async def _direct_answer(user_request: str) -> str:
+    """对于非分析请求，直接用 LLM 回答。"""
+    try:
+        llm = get_llm()
+        prompt = DIRECT_ANSWER_PROMPT.format(request=user_request)
+        response = await llm.ainvoke([HumanMessage(content=prompt)])
+        return extract_text(response)
+    except Exception as e:
+        return f"抱歉，处理您的请求时出现错误: {e}"
+
 
 def extract_text(response) -> str:
     """从 LLM 响应中提取文本，同时记录 token 消耗。MiMo 返回 list[dict]，Claude 返回 str。"""
@@ -48,8 +98,18 @@ async def supervisor_node(state: dict) -> dict:
     trace_tracker.start_agent("supervisor")
     rounds = state.get("supervisor_rounds", 0) + 1
 
-    # 第一轮时召回用户历史偏好
+    # 第一轮：意图分类 + 记忆召回
     if rounds == 1:
+        # 意图分类：判断是否需要走完整 Agent 流程
+        user_request = state.get("user_request", "")
+        intent = await _classify_intent(user_request)
+        if intent == "chat":
+            print(f"[Supervisor] 意图分类: chat，直接回答，不走 Agent 流程")
+            direct_answer = await _direct_answer(user_request)
+            trace_tracker.end_agent("supervisor")
+            return {"next_agent": "end", "supervisor_rounds": rounds, "report_final": direct_answer, "task_complete": True}
+
+        # 召回用户历史偏好
         try:
             memories = await recall_memory("default", state.get("user_request", ""))
             if memories:
