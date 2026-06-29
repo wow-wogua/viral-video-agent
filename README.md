@@ -86,6 +86,3 @@ viral-video-agent/
 └── nginx.conf           # Nginx 反向代理
 ```
 
-## License
-
-MIT
