@@ -12,10 +12,29 @@
 ```
 
 **核心设计：**
-- Supervisor 集中路由 + 三层兜底解析（JSON→正则→状态推断）
+- Supervisor 集中路由 + 意图分类（非分析请求直接回答）+ 三层兜底解析（JSON→正则→状态推断）
 - Researcher LLM 驱动工具选择，通过 MCP 协议调用工具
 - Analyst 自评循环（置信度阈值 0.8）+ Writer 修订循环
 - 长期记忆系统（ChromaDB），支持跨会话复用
+- RAG 检索平台过滤（B站/抖音/快手自动识别）
+
+## 演示
+
+### 首页
+![首页](pictures/home.png)
+
+### 分析中
+![分析中](pictures/analysing.png)
+
+### 报告页面
+![报告页面](pictures/report.png)
+
+### 历史记录
+![历史记录](pictures/history.png)
+
+### 执行轨迹
+![执行轨迹1](pictures/trace1.png)
+![执行轨迹2](pictures/trace2.png)
 
 ## 技术栈
 
