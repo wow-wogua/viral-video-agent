@@ -9,6 +9,33 @@ CATEGORY_MAP = {
     "时尚": 155, "美妆护肤": 155, "美食制作": 211,
 }
 
+# 关键词扩展映射：用户输入 → 相关关键词列表
+_KEYWORD_EXPANSION = {
+    "音乐": ["音乐", "MV", "翻唱", "原创音乐", "歌曲", "演唱会", "Live", "说唱", "民谣", "摇滚", "电音", "古风"],
+    "美食": ["美食", "吃播", "探店", "做饭", "烘焙", "菜谱", "小吃", "火锅", "烧烤"],
+    "游戏": ["游戏", "LOL", "王者", "原神", "绝地求生", "APEX", "英雄联盟", "手游", "端游"],
+    "科技": ["科技", "数码", "手机", "电脑", "评测", "开箱", "AI", "编程"],
+    "舞蹈": ["舞蹈", "宅舞", "街舞", "翻跳", "KPOP"],
+    "搞笑": ["搞笑", "沙雕", "整活", "段子", "脱口秀"],
+    "知识": ["知识", "科普", "学习", "教程", "考试", "考研"],
+}
+
+
+def _expand_keywords(keyword: str) -> list[str]:
+    """扩展关键词：返回原始关键词 + 相关词列表。"""
+    keywords = [keyword]
+    for key, expansions in _KEYWORD_EXPANSION.items():
+        if key in keyword:
+            keywords.extend(expansions)
+            break
+    return keywords
+
+
+def _match_keyword(video: dict, keywords: list[str]) -> bool:
+    """检查视频标题是否匹配任意一个关键词。"""
+    title = video.get("title", "")
+    return any(kw in title for kw in keywords)
+
 
 async def search_douyin(keyword: str, limit: int = 10) -> list[dict]:
     """搜索抖音视频数据。TODO: 接入抖音开放平台 API"""
@@ -30,6 +57,9 @@ async def search_bilibili(keyword: str, limit: int = 10) -> list[dict]:
             rid = cat_id
             break
 
+    # 扩展关键词用于过滤
+    keywords = _expand_keywords(keyword) if keyword else []
+
     async with httpx.AsyncClient(timeout=30, headers=headers) as client:
         # 尝试排行榜接口
         try:
@@ -41,10 +71,14 @@ async def search_bilibili(keyword: str, limit: int = 10) -> list[dict]:
             if data.get("code") == 0:
                 items = data.get("data", {}).get("list", [])
                 all_videos = [_parse_bilibili(item) for item in items]
-                if keyword:
-                    filtered = [v for v in all_videos if keyword in v["title"]]
+                if keywords:
+                    filtered = [v for v in all_videos if _match_keyword(v, keywords)]
                     if filtered:
+                        print(f"[search] 关键词过滤: {len(all_videos)} → {len(filtered)} 条 (关键词: {keywords[:3]}...)")
                         return filtered[:limit]
+                    # 没有匹配的，返回空并提示
+                    print(f"[search] 排行榜中没有匹配 '{keyword}' 的视频")
+                    return []
                 return all_videos[:limit]
             print(f"[search] 排行榜接口返回错误: {data.get('code')}，尝试热门接口")
         except Exception as e:
@@ -60,10 +94,11 @@ async def search_bilibili(keyword: str, limit: int = 10) -> list[dict]:
             if data.get("code") == 0:
                 items = data.get("data", {}).get("list", [])
                 all_videos = [_parse_bilibili(item) for item in items]
-                if keyword:
-                    filtered = [v for v in all_videos if keyword in v["title"]]
+                if keywords:
+                    filtered = [v for v in all_videos if _match_keyword(v, keywords)]
                     if filtered:
                         return filtered[:limit]
+                    return []
                 return all_videos[:limit]
             print(f"[search] 热门接口也返回错误: {data.get('code')}")
         except Exception as e:

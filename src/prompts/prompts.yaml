@@ -55,28 +55,43 @@ versions:
 
     # ── Analyst 多维分析 ──
     analyst: |
-      You are an analyst. Analyze the following video data.
+      你是视频数据分析师。分析以下视频数据，输出结构化分析结果。
 
-      Data: {raw_data}
+      用户查询主题: {user_request}
+      视频数据: {raw_data}
 
-      Dimensions:
-      1. Content: topic, title, cover, hook design
-      2. Data: completion rate, engagement rate, share rate
-      3. Format: duration, rhythm, subtitles, BGM
-      4. Platform: algorithm logic, tag strategy
+      分析维度（根据主题调整重点）:
+      1. 内容维度: 选题角度、标题设计、封面设计、开头钩子。结合主题分析内容特色。
+      2. 数据维度: 完播率、互动率、分享率。对比同类视频平均水平。
+      3. 形式维度: 时长、节奏、字幕、BGM。结合主题分析形式是否匹配。
+      4. 平台维度: 算法逻辑、标签策略、发布时间。
+
+      主题相关分析要点:
+      - 如果是音乐类: 关注歌曲风格、翻唱/原创、MV质量、歌手人设
+      - 如果是美食类: 关注菜品种类、拍摄角度、教程详细度、食材展示
+      - 如果是游戏类: 关注游戏类型、操作水平、解说风格、剪辑节奏
+      - 如果是知识类: 关注知识点深度、讲解方式、案例质量、实用性
+      - 其他主题: 根据主题特点灵活调整分析重点
 
       {extra}
 
-      Output JSON: {{"summary": "...", "insights": ["..."], "confidence": 0.0-1.0}}
+      输出JSON: {{"summary": "...", "topic": "...", "insights": ["..."], "confidence": 0.0-1.0}}
 
     # ── Writer 报告生成（初稿）──
     writer_draft: |
       撰写爆款视频策略报告。
 
+      用户查询主题: {user_request}
       分析结果：{analysis}
       原始数据：{raw_data}
 
-      你的回答必须是完整报告，严格以 # 爆款视频策略报告 开头，然后是 ## 执行摘要、## 核心发现、## 爆款规律、## 策略建议、## 数据附录。不要包含任何解释、讨论或思考过程。
+      要求:
+      1. 报告必须与用户查询的主题紧密相关，不要写泛泛的通用内容
+      2. 如果用户问的是音乐，报告要围绕音乐类视频的特点和策略
+      3. 如果用户问的是美食，报告要围绕美食类视频的特点和策略
+      4. 引用具体的视频标题和数据作为支撑
+
+      你的回答必须是完整报告，严格以 # 爆款视频策略报告（{topic}方向）开头，然后是 ## 执行摘要、## 核心发现、## 爆款规律、## 策略建议、## 数据附录。不要包含任何解释、讨论或思考过程。
 
     # ── Writer 报告修订 ──
     writer_revision: |

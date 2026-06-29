@@ -22,8 +22,9 @@ async def analyst_node(state: AgentState) -> dict:
         return {"analysis_confidence": max(confidence, 0.8)}
 
     extra = "Previous analysis: " + str(prev_analysis) + " Please improve." if prev_analysis else ""
+    user_request = state.get("user_request", "")
 
-    prompt = prompt_manager.get("analyst", raw_data=raw_data, extra=extra)
+    prompt = prompt_manager.get("analyst", raw_data=raw_data, extra=extra, user_request=user_request)
 
     response = await llm.ainvoke([HumanMessage(content=prompt)])
     text = extract_text(response)

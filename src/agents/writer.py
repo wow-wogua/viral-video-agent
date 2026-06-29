@@ -7,6 +7,15 @@ from src.prompts.manager import prompt_manager
 from src.utils.trace_tracker import trace_tracker
 
 
+def _extract_topic(user_request: str) -> str:
+    """从用户请求中提取主题关键词。"""
+    topics = ["音乐", "美食", "游戏", "科技", "舞蹈", "搞笑", "知识", "美妆", "影视", "动画", "体育", "生活"]
+    for t in topics:
+        if t in user_request:
+            return t
+    return "短视频"
+
+
 async def writer_node(state: AgentState) -> dict:
     trace_tracker.start_agent("writer")
     llm = get_llm()
@@ -27,10 +36,13 @@ async def writer_node(state: AgentState) -> dict:
         trace_tracker.end_agent("writer")
         return {"report_final": draft, "task_complete": True}
 
+    user_request = state.get("user_request", "")
+    topic = _extract_topic(user_request)
+
     if draft:
         prompt = prompt_manager.get("writer_revision", draft=draft)
     else:
-        prompt = prompt_manager.get("writer_draft", analysis=analysis, raw_data=raw_data)
+        prompt = prompt_manager.get("writer_draft", analysis=analysis, raw_data=raw_data, user_request=user_request, topic=topic)
 
     response = await llm.ainvoke([HumanMessage(content=prompt)])
     text = extract_text(response)
