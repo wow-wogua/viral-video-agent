@@ -1,0 +1,99 @@
+import httpx
+
+# B站分区ID映射
+CATEGORY_MAP = {
+    "美妆": 155, "美食": 211, "游戏": 4, "科技": 188,
+    "生活": 160, "音乐": 3, "舞蹈": 129, "知识": 36,
+    "影视": 181, "动画": 1, "汽车": 223, "体育": 234,
+    "娱乐": 5, "搞笑": 138, "动物": 217, "家居": 161,
+    "时尚": 155, "美妆护肤": 155, "美食制作": 211,
+}
+
+
+async def search_douyin(keyword: str, limit: int = 10) -> list[dict]:
+    """搜索抖音视频数据。TODO: 接入抖音开放平台 API"""
+    print("[search] 抖音搜索暂未实现，需要接入抖音开放平台 API")
+    return []
+
+
+async def search_bilibili(keyword: str, limit: int = 10) -> list[dict]:
+    """搜索B站视频数据。排行榜接口 + 热门接口兜底。"""
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+        "Referer": "https://www.bilibili.com",
+    }
+
+    # 从关键词中匹配分区ID
+    rid = 0
+    for cat_name, cat_id in CATEGORY_MAP.items():
+        if cat_name in keyword:
+            rid = cat_id
+            break
+
+    async with httpx.AsyncClient(timeout=30, headers=headers) as client:
+        # 尝试排行榜接口
+        try:
+            resp = await client.get(
+                "https://api.bilibili.com/x/web-interface/ranking/v2",
+                params={"rid": rid, "type": "all"},
+            )
+            data = resp.json()
+            if data.get("code") == 0:
+                items = data.get("data", {}).get("list", [])
+                all_videos = [_parse_bilibili(item) for item in items]
+                if keyword:
+                    filtered = [v for v in all_videos if keyword in v["title"]]
+                    if filtered:
+                        return filtered[:limit]
+                return all_videos[:limit]
+            print(f"[search] 排行榜接口返回错误: {data.get('code')}，尝试热门接口")
+        except Exception as e:
+            print(f"[search] 排行榜接口失败: {e}，尝试热门接口")
+
+        # 兜底：热门视频接口
+        try:
+            resp = await client.get(
+                "https://api.bilibili.com/x/web-interface/popular",
+                params={"ps": 50, "pn": 1},
+            )
+            data = resp.json()
+            if data.get("code") == 0:
+                items = data.get("data", {}).get("list", [])
+                all_videos = [_parse_bilibili(item) for item in items]
+                if keyword:
+                    filtered = [v for v in all_videos if keyword in v["title"]]
+                    if filtered:
+                        return filtered[:limit]
+                return all_videos[:limit]
+            print(f"[search] 热门接口也返回错误: {data.get('code')}")
+        except Exception as e:
+            print(f"[search] 热门接口也失败: {e}")
+
+        return []
+
+
+async def search_videos(keyword: str, platforms: list[str], limit: int = 10) -> list[dict]:
+    """统一搜索入口，按平台列表依次搜索。"""
+    results = []
+    for platform in platforms:
+        if platform == "douyin":
+            results.extend(await search_douyin(keyword, limit))
+        elif platform == "bilibili":
+            results.extend(await search_bilibili(keyword, limit))
+        else:
+            print(f"[search] 不支持的平台: {platform}")
+    return results
+
+
+def _parse_bilibili(item: dict) -> dict:
+    stat = item.get("stat", {})
+    return {
+        "platform": "bilibili",
+        "title": item.get("title", ""),
+        "author": item.get("owner", {}).get("name", ""),
+        "likes": stat.get("like", 0),
+        "comments": stat.get("reply", 0),
+        "shares": stat.get("share", 0),
+        "duration": item.get("duration", 0),
+        "url": f"https://www.bilibili.com/video/{item.get('bvid', '')}",
+    }

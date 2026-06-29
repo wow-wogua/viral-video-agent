@@ -1,0 +1,23 @@
+Metadata-Version: 2.4
+Name: viral-video-agent
+Version: 0.1.0
+Summary: 短视频平台爆款视频分析多智能体系统
+Requires-Python: >=3.10
+Requires-Dist: langgraph>=0.2.0
+Requires-Dist: langchain-core<1.0.0,>=0.3.0
+Requires-Dist: langchain-anthropic>=0.3.0
+Requires-Dist: fastapi>=0.115.0
+Requires-Dist: uvicorn[standard]>=0.30.0
+Requires-Dist: python-dotenv>=1.0.0
+Requires-Dist: httpx>=0.27.0
+Requires-Dist: langgraph-checkpoint-sqlite>=2.0.0
+Requires-Dist: aiosqlite>=0.20.0
+Requires-Dist: chromadb>=0.5.0
+Requires-Dist: tiktoken>=0.7.0
+Requires-Dist: mcp>=1.0.0
+Requires-Dist: celery[redis]>=5.4.0
+Requires-Dist: redis>=5.0.0
+Provides-Extra: postgres
+Requires-Dist: langgraph-store-postgres>=0.1.0; extra == "postgres"
+Requires-Dist: psycopg[binary]>=3.0.0; extra == "postgres"
+Requires-Dist: asyncpg>=0.30.0; extra == "postgres"

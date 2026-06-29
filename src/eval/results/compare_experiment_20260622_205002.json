@@ -1,0 +1,235 @@
+{
+  "cases": 3,
+  "multi_agent": {
+    "avg_score": 2.93,
+    "avg_latency_s": 135.5,
+    "avg_tokens": 45743,
+    "details": [
+      {
+        "case_id": "cmp-01",
+        "scores": {
+          "completeness": {
+            "score": 5,
+            "reason": "报告结构完整，涵盖了执行摘要、核心发现、爆款规律、策略建议等核心部分，全面回应了用户分析热门视频特征与规律的需求。"
+          },
+          "accuracy": {
+            "score": 5,
+            "reason": "结论逻辑自洽，数据引用具体（如时长占比、互动率提升百分比），观点有支撑，且符合B站平台内容生态的普遍认知，无明显事实错误。"
+          },
+          "actionability": {
+            "score": 5,
+            "reason": "策略建议非常具体，如黄金3秒法则、结构前重后轻、A/B测试标题封面等，均可直接指导创作者进行视频策划与优化。"
+          },
+          "data_quality": {
+            "score": 3,
+            "reason": "报告声称基于100条视频的量化分析并引用了大量具体数据，但未提供原始数据或详细的方法论说明，数据的透明度和可验证性有限。"
+          },
+          "overall": {
+            "score": 4,
+            "reason": "报告质量优秀，内容深刻、结构清晰、建议极具操作性，作为一份策略分析报告非常出色。扣分主要在于数据来源与处理过程不够透明。"
+          }
+        },
+        "avg_score": 4.4,
+        "report_length": 1403,
+        "latency_s": 132.5,
+        "cost": {
+          "input_tokens": 48626,
+          "output_tokens": 9000,
+          "total_cost": 0.0
+        },
+        "supervisor_rounds": 9,
+        "analysis_iterations": 1,
+        "report_revision_count": 3,
+        "raw_data_count": 100
+      },
+      {
+        "case_id": "cmp-02",
+        "scores": {
+          "completeness": {
+            "score": 2,
+            "reason": "报告结构完整，但核心发现与策略建议仅基于一条有效数据（脑机接口视频），未能覆盖用户需求中‘分析多条代表性视频’和‘找出涨粉规律’的核心要求，存在严重数据和分析遗漏。"
+          },
+          "accuracy": {
+            "score": 2,
+            "reason": "部分结论（如短时长利于推荐、科技类内容传播力强）有单一数据点支持且逻辑自洽，但将一条视频的数据泛化为普遍规律，并基于三条缺失数据得出‘赞助标识抑制分享’等结论，缺乏充分依据，准确性不足。"
+          },
+          "actionability": {
+            "score": 3,
+            "reason": "策略建议（如压缩时长、强化标题、抢占发布窗口）具体且有一定参考价值，但建议过度依赖不完整的数据基础，其普适性和有效性存疑。"
+          },
+          "data_quality": {
+            "score": 1,
+            "reason": "仅引用并分析了一条视频的数据，三条视频数据完全缺失，附录信息不全。未能有效利用数据，严重依赖不完整样本进行推论，数据质量极差。"
+          },
+          "overall": {
+            "score": 2,
+            "reason": "报告框架专业，但核心分析严重依赖不完整数据，结论缺乏支撑，作为项目展示无法证明其方法论的有效性，整体完成度低，仅及格边缘。"
+          }
+        },
+        "avg_score": 2.0,
+        "report_length": 1546,
+        "latency_s": 134.9,
+        "cost": {
+          "input_tokens": 13558,
+          "output_tokens": 9276,
+          "total_cost": 0.0
+        },
+        "supervisor_rounds": 9,
+        "analysis_iterations": 1,
+        "report_revision_count": 3,
+        "raw_data_count": 4
+      },
+      {
+        "case_id": "cmp-03",
+        "scores": {
+          "completeness": {
+            "score": 2,
+            "reason": "报告完全偏离用户需求，用户明确要求对比B站游戏区与生活区的差异并给出跨分区策略，但报告仅聚焦游戏区，对生活区只字未提，核心需求被严重遗漏。"
+          },
+          "accuracy": {
+            "score": 3,
+            "reason": "报告内部分析逻辑自洽，对游戏区爆款视频的规律总结有数据指标支撑，但由于未进行对比，其结论是否准确反映了“差异”无法验证，只能就其自身内容判断为基本准确。"
+          },
+          "actionability": {
+            "score": 4,
+            "reason": "针对游戏区的策略建议（如精品化投入、构建创作者生态、数据化运营）具体可量化，具有较强的可执行性。但因其完全未提供跨分区策略，这部分核心价值缺失。"
+          },
+          "data_quality": {
+            "score": 1,
+            "reason": "报告声称基于数据，但未提供任何原始数据或数据来源、样本量、时间范围等关键信息，所有数据指标（如点赞量、分享率）均无法追溯和验证，数据利用流于表面。"
+          },
+          "overall": {
+            "score": 2,
+            "reason": "报告本身作为游戏区分析有一定质量，但因其完全未响应用户的核心对比需求，导致报告的主要价值丧失，作为任务交付物严重不合格。"
+          }
+        },
+        "avg_score": 2.4,
+        "report_length": 1248,
+        "latency_s": 139.0,
+        "cost": {
+          "input_tokens": 47882,
+          "output_tokens": 8886,
+          "total_cost": 0.0
+        },
+        "supervisor_rounds": 8,
+        "analysis_iterations": 1,
+        "report_revision_count": 3,
+        "raw_data_count": 97
+      }
+    ]
+  },
+  "single_agent": {
+    "avg_score": 2.4,
+    "avg_latency_s": 29.0,
+    "avg_tokens": 3401,
+    "details": [
+      {
+        "case_id": "cmp-01",
+        "scores": {
+          "completeness": {
+            "score": 5,
+            "reason": "报告结构完整，覆盖了执行摘要、核心发现、规律总结和策略建议，全面回应了分析内容特征和爆款规律的用户需求。"
+          },
+          "accuracy": {
+            "score": 3,
+            "reason": "分析结论基于逻辑推断和行业观察，逻辑自洽，但明确指出缺乏具体播放、点赞等数据支撑，属于基于经验的合理推断而非数据验证。"
+          },
+          "actionability": {
+            "score": 4,
+            "reason": "策略建议如“情绪-圈层矩阵选题法”、“黄金开头设计”等具体、可操作，为内容创作提供了明确指引。"
+          },
+          "data_quality": {
+            "score": 1,
+            "reason": "报告明确声明“原始数据（部分）无原始数据”，所有分析均未引用任何具体数据，数据维度完全缺失。"
+          },
+          "overall": {
+            "score": 3,
+            "reason": "报告框架专业、逻辑清晰、建议有用，具备作为行业分析框架的价值，但因缺乏核心数据支撑，整体质量仅达到及格线。"
+          }
+        },
+        "avg_score": 3.2,
+        "report_length": 1656,
+        "raw_data_count": 10,
+        "latency_s": 30.0,
+        "cost": {
+          "input_tokens": 1296,
+          "output_tokens": 2048,
+          "total_cost": 0.0
+        }
+      },
+      {
+        "case_id": "cmp-02",
+        "scores": {
+          "completeness": {
+            "score": 3,
+            "reason": "报告结构完整，覆盖了内容、形式、数据等分析维度，但用户需求的核心“涨粉规律”未深入、系统地提炼，且执行计划为空，存在关键遗漏。"
+          },
+          "accuracy": {
+            "score": 3,
+            "reason": "对标题模式的分析逻辑自洽，但所有结论均基于10个标题的文本推断，缺乏播放、点赞、涨粉等量化数据的支撑，分析深度和可靠性受限。"
+          },
+          "actionability": {
+            "score": 2,
+            "reason": "策略建议多为方向性描述（如“提供可立即应用的价值”），缺少具体的操作步骤、指标设定或案例拆解，直接可执行性弱。"
+          },
+          "data_quality": {
+            "score": 1,
+            "reason": "报告明确说明未包含量化数据，所有分析仅基于10个标题的文本，未有效利用或展示任何原始数据，数据驱动分析严重缺失。"
+          },
+          "overall": {
+            "score": 2,
+            "reason": "报告呈现了一个分析框架，但因核心数据缺失、涨粉规律提炼不足、执行计划空白，整体更像一个未完成的初步草稿，作为项目展示完成度低。"
+          }
+        },
+        "avg_score": 2.2,
+        "report_length": 1669,
+        "raw_data_count": 10,
+        "latency_s": 29.2,
+        "cost": {
+          "input_tokens": 1450,
+          "output_tokens": 2048,
+          "total_cost": 0.0
+        }
+      },
+      {
+        "case_id": "cmp-03",
+        "scores": {
+          "completeness": {
+            "score": 2,
+            "reason": "报告覆盖了对比分析维度，但核心的‘跨分区运营策略’部分（执行计划）为空，且爆款规律总结不完整，严重遗漏了用户需求的最终落脚点。"
+          },
+          "accuracy": {
+            "score": 3,
+            "reason": "分析逻辑自洽，对B站两大分区特征的描述符合普遍认知，但缺乏任何具体数据或案例支撑，所有结论均为定性推断。"
+          },
+          "actionability": {
+            "score": 1,
+            "reason": "用户要求的‘跨分区运营策略’是空列表，报告完全没有给出任何具体、可执行的策略建议。"
+          },
+          "data_quality": {
+            "score": 1,
+            "reason": "报告明确注明‘无原始数据’，所有分析均未引用任何实际数据，属于纯定性描述。"
+          },
+          "overall": {
+            "score": 2,
+            "reason": "报告结构尚可，分析框架有一定参考价值，但关键策略缺失、数据支撑为零，未完成核心任务。"
+          }
+        },
+        "avg_score": 1.8,
+        "report_length": 1616,
+        "raw_data_count": 10,
+        "latency_s": 27.9,
+        "cost": {
+          "input_tokens": 1312,
+          "output_tokens": 2048,
+          "total_cost": 0.0
+        }
+      }
+    ]
+  },
+  "delta": {
+    "score": 0.53,
+    "latency_s": 106.4,
+    "tokens": 42342
+  }
+}

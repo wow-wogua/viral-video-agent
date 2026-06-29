@@ -1,0 +1,74 @@
+{
+  "meta": {
+    "framework": "llm-judge-eval",
+    "version": "1.0",
+    "dimensions": [
+      "completeness",
+      "accuracy",
+      "actionability",
+      "data_quality",
+      "overall"
+    ],
+    "total_cases": 1,
+    "timestamp": "2026-06-22 20:13:24"
+  },
+  "summary": {
+    "total": 1,
+    "ok": 1,
+    "errors": 0,
+    "no_report": 0,
+    "avg_score": 3.2,
+    "avg_latency_s": 142.9,
+    "dimension_averages": {
+      "completeness": 4.0,
+      "accuracy": 3.0,
+      "actionability": 4.0,
+      "data_quality": 2.0,
+      "overall": 3.0
+    },
+    "category_breakdown": {
+      "simple": {
+        "count": 1,
+        "avg_score": 3.2
+      }
+    }
+  },
+  "cases": [
+    {
+      "case_id": "builtin-01",
+      "query": "分析B站当前热门视频的内容特征和爆款规律",
+      "category": "simple",
+      "status": "ok",
+      "latency_s": 142.9,
+      "report_length": 1677,
+      "plan_steps": 7,
+      "raw_data_count": 50,
+      "supervisor_rounds": 9,
+      "analysis_iterations": 1,
+      "report_revision_count": 3,
+      "scores": {
+        "completeness": {
+          "score": 4,
+          "reason": "报告结构完整，涵盖了从执行摘要、核心发现、规律提炼到策略建议的全流程，覆盖了用户需求的核心方面。但对“量化”的深度体现不足，部分分析仍显定性。"
+        },
+        "accuracy": {
+          "score": 3,
+          "reason": "分析框架合理，所提炼的规律与B站平台特点基本吻合。但问题在于原始数据中关键指标（播放、点赞）大量为N/A，导致报告中引用的具体案例数据（如分享/点赞比）缺乏可信来源，逻辑自洽但根基不牢。"
+        },
+        "actionability": {
+          "score": 4,
+          "reason": "策略建议非常具体，从内容策划、制作发布到运营优化都给出了清晰、可执行的步骤和技巧（如“前3秒抛出情绪点”），对内容创作者具有直接指导价值。"
+        },
+        "data_quality": {
+          "score": 2,
+          "reason": "这是报告最大的短板。原始数据关键字段缺失，无法进行有效的量化分析和验证。报告虽尝试引用案例，但数据支撑薄弱，导致“量化版”名不副实，主要依赖定性归纳。"
+        },
+        "overall": {
+          "score": 3,
+          "reason": "作为一份分析报告，其结构、逻辑和建议都展现出专业性，可读性强。但核心缺陷在于数据基础不牢，削弱了结论的说服力。整体达到及格水平，但离“优秀”有差距。"
+        }
+      },
+      "avg_score": 3.2
+    }
+  ]
+}

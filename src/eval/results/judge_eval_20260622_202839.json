@@ -1,0 +1,121 @@
+{
+  "meta": {
+    "framework": "llm-judge-eval",
+    "version": "1.0",
+    "dimensions": [
+      "completeness",
+      "accuracy",
+      "actionability",
+      "data_quality",
+      "overall"
+    ],
+    "total_cases": 1,
+    "timestamp": "2026-06-22 20:28:39"
+  },
+  "summary": {
+    "total": 1,
+    "ok": 1,
+    "errors": 0,
+    "no_report": 0,
+    "avg_score": 2.8,
+    "avg_latency_s": 161.9,
+    "dimension_averages": {
+      "completeness": 5.0,
+      "accuracy": 2.0,
+      "actionability": 4.0,
+      "data_quality": 1.0,
+      "overall": 2.0
+    },
+    "category_breakdown": {
+      "simple": {
+        "count": 1,
+        "avg_score": 2.8
+      }
+    },
+    "fallback_stats": {
+      "total_parses": 11,
+      "by_layer": {
+        "json": 9,
+        "regex": 2,
+        "inference": 0,
+        "default": 0
+      },
+      "json_rate": 0.818,
+      "regex_rate": 0.182,
+      "inference_rate": 0.0
+    }
+  },
+  "cases": [
+    {
+      "case_id": "builtin-01",
+      "query": "分析B站当前热门视频的内容特征和爆款规律",
+      "category": "simple",
+      "status": "ok",
+      "latency_s": 161.9,
+      "report_length": 1549,
+      "plan_steps": 6,
+      "raw_data_count": 50,
+      "supervisor_rounds": 9,
+      "analysis_iterations": 2,
+      "report_revision_count": 3,
+      "scores": {
+        "completeness": {
+          "score": 5,
+          "reason": "报告结构完整，从执行摘要、核心发现、爆款规律到策略建议和执行计划，覆盖了分析、洞察和行动的全流程，无明显遗漏。"
+        },
+        "accuracy": {
+          "score": 2,
+          "reason": "报告结论看似合理且逻辑自洽，但所有具体数据（如占比、提升百分比）均无原始数据支撑，存在大量推测和夸大（如点击率提升150%），属于‘基于假设的合理想象’而非严谨分析。"
+        },
+        "actionability": {
+          "score": 4,
+          "reason": "策略建议具体，有明确的优化方向和量化目标（如前5秒强情绪点、评论率1.8倍），可操作性较强，但部分建议（如‘深耕垂直领域’）仍属方向性指导。"
+        },
+        "data_quality": {
+          "score": 1,
+          "reason": "报告未有效利用原始数据。原始数据仅提供标题，缺失播放、点赞等关键指标，报告却声称基于50个视频的详细分析并得出精确比例，数据引用完全不成立。"
+        },
+        "overall": {
+          "score": 2,
+          "reason": "报告框架优秀、建议具体，但作为‘分析报告’，其核心缺陷是缺乏真实数据支撑，所有结论建立在未验证的假设上，因此整体完成度较低，更像一份‘策略构想’而非‘数据分析报告’。"
+        }
+      },
+      "avg_score": 2.8,
+      "fallback": {
+        "total": 11,
+        "by_layer": {
+          "json": 9,
+          "regex": 2,
+          "inference": 0,
+          "default": 0
+        },
+        "by_agent": {
+          "supervisor": {
+            "json": 8,
+            "regex": 0,
+            "inference": 0,
+            "default": 0,
+            "total": 8
+          },
+          "researcher": {
+            "json": 1,
+            "regex": 0,
+            "inference": 0,
+            "default": 0,
+            "total": 1
+          },
+          "analyst": {
+            "json": 0,
+            "regex": 2,
+            "inference": 0,
+            "default": 0,
+            "total": 2
+          }
+        },
+        "json_rate": 0.818,
+        "regex_rate": 0.182,
+        "inference_rate": 0.0
+      }
+    }
+  ]
+}

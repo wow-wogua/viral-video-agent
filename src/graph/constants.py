@@ -1,0 +1,5 @@
+SUPERVISOR = "supervisor"
+PLANNER = "planner"
+RESEARCHER = "researcher"
+ANALYST = "analyst"
+WRITER = "writer"

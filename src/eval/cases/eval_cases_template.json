@@ -1,0 +1,25 @@
+{
+    "_说明": "评测用例模板。复制此文件并填入具体用例。每条用例的字段说明见下方注释。",
+    "_字段说明": {
+        "id": "唯一标识，如 'custom-01'",
+        "query": "用户输入的需求（必填）",
+        "category": "分类：simple / medium / complex / edge",
+        "tags": ["标签，用于筛选和分组，如 'bilibili', '美妆', '对比'"],
+        "expect_min_score": "可选，期望最低平均分（1-5），低于此分视为失败",
+        "expect_rules": ["可选，自定义检查规则，如 'report contains 策略建议'"]
+    },
+    "cases": [
+        {
+            "id": "custom-01",
+            "query": "在此填入用户需求，例如：分析B站美妆区最近的爆款视频，总结选题和封面设计规律",
+            "category": "medium",
+            "tags": ["bilibili", "美妆"]
+        },
+        {
+            "id": "custom-02",
+            "query": "在此填入第二个用例",
+            "category": "simple",
+            "tags": ["bilibili"]
+        }
+    ]
+}
