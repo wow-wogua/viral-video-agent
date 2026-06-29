@@ -80,7 +80,7 @@ viral-video-agent/
 │   ├── mcp/             # MCP Client
 │   └── api/             # FastAPI 路由
 ├── frontend/            # Next.js 前端
-├── knowledge/           # RAG 知识库（26 篇，5 分类）
+├── knowledge/           # RAG 知识库（30 篇，5 分类）
 ├── docker-compose.yml   # 6 服务编排
 ├── Dockerfile           # 后端镜像
 └── nginx.conf           # Nginx 反向代理
