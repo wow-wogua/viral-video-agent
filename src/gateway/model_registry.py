@@ -17,6 +17,7 @@ class ModelRegistry:
 
     def switch_to_finetuned(self, agent_name: str, model: str, base_url: str, api_key: str):
         self.MODELS[agent_name] = {
+            "provider": "openai",
             "model": model,
             "base_url": base_url,
             "api_key": api_key,

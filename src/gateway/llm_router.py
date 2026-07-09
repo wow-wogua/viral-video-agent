@@ -54,7 +54,8 @@ def get_llm(agent_name: str = "default"):
     if registered:
         provider = registered.get("provider", "anthropic")
         model = registered["model"]
-        if provider == "deepseek":
+        if provider in ("deepseek", "openai"):
+            # DeepSeek 和 OpenAI 兼容接口都用 ChatOpenAI
             llm = _build_deepseek(model, registered.get("base_url"), registered.get("api_key"))
         else:
             llm = _build_anthropic(model, registered.get("base_url", ANTHROPIC_BASE_URL),

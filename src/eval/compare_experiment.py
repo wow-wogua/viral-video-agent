@@ -40,6 +40,7 @@ async def run_multi_agent(query: str) -> dict:
     result = await graph.ainvoke(
         {
             "user_request": query,
+            "platforms": ["bilibili"],
             "task_complete": False,
             "data_sufficient": False,
             "analysis_confidence": 0.0,

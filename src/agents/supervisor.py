@@ -7,6 +7,7 @@ from src.memory.long_term import recall_memory
 from src.utils.fallback_counter import fallback_counter
 from src.utils.trace_tracker import trace_tracker
 from src.prompts.manager import prompt_manager
+from src.config import ANALYSIS_CONFIDENCE_THRESHOLD, ANALYST_MAX_ITERATIONS
 
 MAX_SUPERVISOR_ROUNDS = 20
 
@@ -133,6 +134,14 @@ async def supervisor_node(state: dict) -> dict:
     if state.get("plan") and state.get("data_sufficient") and state.get("analysis") and state.get("report_final"):
         trace_tracker.end_agent("supervisor")
         return {"next_agent": "end", "supervisor_rounds": rounds}
+
+    # 确定性自评回环：分析置信度低于阈值时继续 Analyst，避免只依赖 LLM 路由 Prompt。
+    if state.get("analysis") and not state.get("report_final"):
+        confidence = state.get("analysis_confidence", 0.0)
+        iterations = state.get("analysis_iterations", 0)
+        if confidence < ANALYSIS_CONFIDENCE_THRESHOLD and iterations < ANALYST_MAX_ITERATIONS:
+            trace_tracker.end_agent("supervisor")
+            return {"next_agent": ANALYST, "supervisor_rounds": rounds}
 
     llm = get_llm()
 

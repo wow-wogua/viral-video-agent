@@ -4,6 +4,7 @@ from langgraph.graph import add_messages
 
 class AgentState(TypedDict, total=False):
     user_request: str
+    platforms: list[str]
     next_agent: str
     task_complete: bool
     plan: list[str]

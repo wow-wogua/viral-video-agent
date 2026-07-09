@@ -29,9 +29,10 @@ async def call_tool_via_mcp(tool_name: str, params: dict):
 
 async def researcher_node(state: AgentState) -> dict:
     trace_tracker.start_agent("researcher")
-    llm = get_llm()
+    llm = get_llm("researcher")
     plan = state.get("plan", [])
     current_step = state.get("current_step", 0)
+    platforms = state.get("platforms") or ["bilibili"]
 
     if current_step >= len(plan):
         trace_tracker.end_agent("researcher")
@@ -40,14 +41,14 @@ async def researcher_node(state: AgentState) -> dict:
     task = plan[current_step]
     print(f"[Researcher] exec: {task}")
 
-    prompt = prompt_manager.get("researcher", task=task)
+    prompt = prompt_manager.get("researcher", task=task, platforms=platforms)
 
     response = await llm.ainvoke([HumanMessage(content=prompt)])
     text = extract_text(response)
 
     # 解析LLM输出，兜底到硬编码
     tool_name = "search_videos"
-    params = {"keyword": task, "platforms": ["bilibili"], "limit": 5}
+    params = {"keyword": task, "platforms": platforms, "limit": 5}
     try:
         clean = text.strip()
         if clean.startswith("```"):
@@ -55,6 +56,8 @@ async def researcher_node(state: AgentState) -> dict:
         decision = json.loads(clean)
         tool_name = decision.get("tool", "search_videos")
         params = decision.get("params", params)
+        if tool_name == "search_videos" and not params.get("platforms"):
+            params["platforms"] = platforms
         fallback_counter.log("researcher", "json")
         print(f"[Researcher] LLM选择工具: {tool_name}")
     except (json.JSONDecodeError, KeyError) as e:

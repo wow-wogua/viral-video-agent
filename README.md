@@ -14,7 +14,7 @@
 **核心设计：**
 - Supervisor 集中路由 + 意图分类（非分析请求直接回答）+ 三层兜底解析（JSON→正则→状态推断）
 - Researcher LLM 驱动工具选择，通过 MCP 协议调用工具
-- Analyst 自评循环（置信度阈值 0.8）+ Writer 修订循环
+- Analyst 自评循环（默认置信度阈值 0.8，可用环境变量调整）+ Writer 修订循环
 - 长期记忆系统（ChromaDB），支持跨会话复用
 - RAG 检索平台过滤（B站/抖音/快手自动识别）
 
@@ -41,7 +41,7 @@
 | 组件 | 技术 |
 |------|------|
 | 编排框架 | LangGraph |
-| LLM | MiMo / DeepSeek |
+| LLM | MiMo / DeepSeek / 微调模型（Qwen3-4B LoRA） |
 | 工具协议 | MCP (SSE) |
 | 向量数据库 | ChromaDB |
 | 后端 | FastAPI |
@@ -70,13 +70,36 @@ docker-compose up -d
 # MCP Server：http://localhost:8001
 ```
 
+### 使用微调模型（可选）
+
+Researcher Agent 可以使用 LoRA 微调后的 Qwen3-4B 模型替代 MiMo API。内置 50 条工具调用评测中准确率从 88% 提升至 94%、完全准确率从 54% 提升至 80%；独立 hard eval / holdout 未证明自然表达边界提升，因此该模型当前作为 Researcher 的可选 A/B 路径，默认链路仍可继续使用 MiMo API。
+
+```bash
+# 终端1：启动微调模型 API（需要先训练，见 tool-calling-finetune 项目）
+cd D:\internship\tool-calling-finetune
+python scripts\serve_model.py
+
+# 终端2：启动项目2，启用微调模型
+cd D:\internship\viral-video-agent
+set USE_FINETUNED_MODEL=true
+set FINETUNED_MODEL_URL=http://host.docker.internal:8002/v1
+docker-compose up -d
+```
+
+只有 Researcher 使用微调模型，其他 Agent（Supervisor/Planner/Analyst/Writer）仍用 MiMo API。
+
+**关闭：**
+- 终端1：Ctrl+C
+- 终端2：`docker-compose down`
+
 ## 评测数据
 
 | 指标 | 结果 |
 |------|------|
 | 多 Agent vs 单 Agent | 复杂任务 +0.53 分（+0.6~1.2） |
 | LLM-as-Judge 评测框架 | 5 维度打分（完整性/准确性/可操作性/数据利用/综合） |
-| BFCL 工具调用准确率 | 90.0%（30 条） |
+| BFCL 工具调用准确率 | 90.0%（30 条，MiMo API） |
+| 微调模型工具准确率 | 94.0%（50 条内置评测，Qwen3-4B SFT+DPO）；hard eval / holdout 用于误差分析，未证明自然表达边界提升 |
 | tau-bench 端到端成功率 | 100%（18 条） |
 | RAG 检索命中率 | 67.9%（28 条） |
 | 单次分析耗时 | 2.6 分钟 |
@@ -104,4 +127,3 @@ viral-video-agent/
 ├── Dockerfile           # 后端镜像
 └── nginx.conf           # Nginx 反向代理
 ```
-

@@ -61,6 +61,7 @@ async def analyze(request: AnalyzeRequest):
     trace_tracker.reset()
     result = await graph.ainvoke({
         "user_request": request.query,
+        "platforms": request.platforms,
         "task_complete": False,
         "data_sufficient": False,
         "analysis_confidence": 0.0,
@@ -104,6 +105,7 @@ async def analyze_stream(request: AnalyzeRequest):
         async for event in graph.astream_events(
             {
                 "user_request": request.query,
+                "platforms": request.platforms,
                 "task_complete": False,
                 "data_sufficient": False,
                 "analysis_confidence": 0.0,

@@ -10,6 +10,10 @@ services:
       - CHROMA_HOST=chromadb
       - CHROMA_PORT=8000
       - HF_ENDPOINT=https://hf-mirror.com
+      - USE_FINETUNED_MODEL=${USE_FINETUNED_MODEL:-false}
+      - FINETUNED_MODEL_URL=${FINETUNED_MODEL_URL:-http://host.docker.internal:8002/v1}
+      - ANALYSIS_CONFIDENCE_THRESHOLD=${ANALYSIS_CONFIDENCE_THRESHOLD:-0.8}
+      - PROMPT_VERSION=${PROMPT_VERSION:-v1}
     depends_on:
       - chromadb
       - redis

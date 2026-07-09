@@ -194,6 +194,7 @@ async def ablation_test():
         result_rag = await graph.ainvoke(
             {
                 "user_request": query,
+                "platforms": ["bilibili"],
                 "task_complete": False,
                 "data_sufficient": False,
                 "analysis_confidence": 0.0,
@@ -210,6 +211,7 @@ async def ablation_test():
         result_no_rag = await graph.ainvoke(
             {
                 "user_request": query,
+                "platforms": ["bilibili"],
                 "task_complete": False,
                 "data_sufficient": False,
                 "analysis_confidence": 0.0,

@@ -187,6 +187,7 @@ async def eval_e2e():
             result = await graph.ainvoke(
                 {
                     "user_request": case["query"],
+                    "platforms": case.get("platforms", ["bilibili"]),
                     "task_complete": False,
                     "data_sufficient": False,
                     "analysis_confidence": 0.0,

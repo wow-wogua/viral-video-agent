@@ -122,13 +122,28 @@ async def search_videos(keyword: str, platforms: list[str], limit: int = 10) -> 
 
 def _parse_bilibili(item: dict) -> dict:
     stat = item.get("stat", {})
+    view_count = stat.get("view", 0)
+    like_count = stat.get("like", 0)
+    comment_count = stat.get("reply", 0)
+    share_count = stat.get("share", 0)
     return {
         "platform": "bilibili",
+        "bvid": item.get("bvid", ""),
+        "aid": item.get("aid", ""),
         "title": item.get("title", ""),
         "author": item.get("owner", {}).get("name", ""),
-        "likes": stat.get("like", 0),
-        "comments": stat.get("reply", 0),
-        "shares": stat.get("share", 0),
+        "view": view_count,
+        "views": view_count,
+        "play": view_count,
+        "like": like_count,
+        "likes": like_count,
+        "comment": comment_count,
+        "comments": comment_count,
+        "reply": comment_count,
+        "share": share_count,
+        "shares": share_count,
+        "coin": stat.get("coin", 0),
+        "favorite": stat.get("favorite", 0),
         "duration": item.get("duration", 0),
         "url": f"https://www.bilibili.com/video/{item.get('bvid', '')}",
     }

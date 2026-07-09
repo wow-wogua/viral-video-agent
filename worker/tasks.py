@@ -12,6 +12,7 @@ def run_analysis(self, session_id: str, query: str, platforms: list[str]):
     try:
         result = graph.invoke({
             "user_request": query,
+            "platforms": platforms,
             "task_complete": False,
             "data_sufficient": False,
             "analysis_confidence": 0.0,

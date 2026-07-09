@@ -44,6 +44,7 @@ versions:
       你是研究员。根据任务选择工具和参数。
 
       任务: {task}
+      目标平台: {platforms}
 
       可用工具:
       - search_videos(keyword, platforms, limit): 搜索视频数据。keyword=搜索关键词，platforms=平台列表，limit=返回数量

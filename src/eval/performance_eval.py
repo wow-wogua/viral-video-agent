@@ -31,6 +31,7 @@ async def evaluate_performance():
             result = await graph.ainvoke(
                 {
                     "user_request": case["query"],
+                    "platforms": ["bilibili"],
                     "task_complete": False,
                     "data_sufficient": False,
                     "analysis_confidence": 0.0,

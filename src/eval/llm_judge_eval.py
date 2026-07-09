@@ -216,6 +216,7 @@ async def run_single_case(case: dict, graph, case_index: int, total: int) -> dic
         result = await graph.ainvoke(
             {
                 "user_request": query,
+                "platforms": case.get("platforms", ["bilibili"]),
                 "task_complete": False,
                 "data_sufficient": False,
                 "analysis_confidence": 0.0,
