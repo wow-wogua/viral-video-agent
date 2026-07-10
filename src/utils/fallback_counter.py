@@ -14,10 +14,20 @@
     summary = fallback_counter.get_summary()
 """
 
+from contextvars import ContextVar
+
+
+_records_var: ContextVar[list[dict] | None] = ContextVar("fallback_records", default=None)
+
 
 class FallbackCounter:
-    def __init__(self):
-        self._records: list[dict] = []
+    @staticmethod
+    def _records() -> list[dict]:
+        records = _records_var.get()
+        if records is None:
+            records = []
+            _records_var.set(records)
+        return records
 
     def log(self, agent: str, layer: str):
         """记录一次解析事件。
@@ -26,14 +36,15 @@ class FallbackCounter:
             agent: Agent 名称（supervisor / researcher / analyst / writer）
             layer: 命中的层（json / regex / inference / default）
         """
-        self._records.append({"agent": agent, "layer": layer})
+        self._records().append({"agent": agent, "layer": layer})
 
     def get_summary(self) -> dict:
         """返回按 Agent 和层级的汇总统计。"""
         by_agent = {}
         by_layer = {"json": 0, "regex": 0, "inference": 0, "default": 0}
 
-        for r in self._records:
+        records = self._records()
+        for r in records:
             agent = r["agent"]
             layer = r["layer"]
             if agent not in by_agent:
@@ -42,7 +53,7 @@ class FallbackCounter:
             by_agent[agent]["total"] += 1
             by_layer[layer] = by_layer.get(layer, 0) + 1
 
-        total = len(self._records)
+        total = len(records)
         return {
             "total": total,
             "by_layer": by_layer,
@@ -53,7 +64,7 @@ class FallbackCounter:
         }
 
     def reset(self):
-        self._records.clear()
+        _records_var.set([])
 
 
 fallback_counter = FallbackCounter()

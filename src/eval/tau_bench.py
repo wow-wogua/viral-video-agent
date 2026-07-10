@@ -7,7 +7,8 @@ from src.graph.builder import build_graph
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 
-# tau-bench 评测集：18 条，覆盖简单(3)/中等(3)/复杂(5)/边界(7) 4 类任务
+# tau-bench-inspired 端到端冒烟用例：18 条。
+# 仅检查本项目状态字段和基本规则，不是官方 tau-bench 基准成绩。
 E2E_CASES = [
     # ── 简单任务（单步）──
     {
@@ -167,11 +168,11 @@ def check_rule(rule: str, result: dict) -> bool:
         return result.get("analysis_confidence", 0) > 0
     if rule == "analysis_iterations >= 1":
         return result.get("analysis_iterations", 0) >= 1
-    return True  # 未知规则默认通过
+    return False
 
 
 async def eval_e2e():
-    """评估端到端任务成功率（tau-bench 范式）+ 性能指标。"""
+    """运行自建 tau-bench-inspired 端到端冒烟检查 + 性能统计。"""
     graph = build_graph()
     success = 0
     total = len(E2E_CASES)
@@ -251,7 +252,7 @@ async def eval_e2e():
     passed_results = [r for r in all_results if r.get("passed")]
 
     print(f"\n{'='*60}")
-    print(f"端到端任务成功率: {success}/{total} ({rate:.1f}%)")
+    print(f"端到端冒烟通过率: {success}/{total} ({rate:.1f}%)")
     if passed_results:
         avg_latency = sum(r["latency_s"] for r in passed_results) / len(passed_results)
         avg_rounds = sum(r.get("supervisor_rounds", 0) for r in passed_results) / len(passed_results)

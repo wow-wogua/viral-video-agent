@@ -19,7 +19,7 @@ async def analyst_node(state: AgentState) -> dict:
     if iterations >= ANALYST_MAX_ITERATIONS:
         confidence = state.get("analysis_confidence", 0.0)
         trace_tracker.end_agent("analyst")
-        return {"analysis_confidence": max(confidence, 0.8)}
+        return {"analysis_confidence": confidence}
 
     extra = "Previous analysis: " + str(prev_analysis) + " Please improve." if prev_analysis else ""
     user_request = state.get("user_request", "")

@@ -6,7 +6,7 @@
 
 用法:
     python -m src.eval.single_agent_baseline --query "分析B站当前热门视频的内容特征和爆款规律"
-    python -m src.eval.single_agent_baseline --cases tau   # 跑 tau-bench 18 条
+    python -m src.eval.single_agent_baseline --cases tau   # 跑 18 条 tau-bench-inspired 冒烟用例
 """
 
 import asyncio

@@ -21,6 +21,8 @@ async def planner_node(state: AgentState) -> dict:
         for line in text.strip().split("\n")
         if line.strip() and line.strip()[0].isdigit()
     ]
+    if not plan_steps:
+        plan_steps = [f"1. 分析用户需求并采集相关数据 — 需要: researcher — 预期产出: 数据（{user_request}）"]
 
     trace_tracker.end_agent("planner")
     return {"plan": plan_steps, "current_step": 0}

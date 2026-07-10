@@ -28,8 +28,9 @@ async def writer_node(state: AgentState) -> dict:
         # 存储分析记忆
         try:
             user_request = state.get("user_request", "")
-            await save_memory("default", "last_analysis", user_request)
-            await save_memory("default", "last_report_summary", draft[:200])
+            user_id = state.get("user_id", "anonymous")
+            await save_memory(user_id, "last_analysis", user_request)
+            await save_memory(user_id, "last_report_summary", draft[:200])
             print(f"[Writer] 已存储分析记忆")
         except Exception as e:
             print(f"[Writer] 记忆存储失败: {e}")

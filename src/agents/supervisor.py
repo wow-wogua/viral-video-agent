@@ -67,16 +67,10 @@ def extract_text(response) -> str:
     # 记录 LLM 调用次数（自动关联当前 Agent）
     trace_tracker.log_llm_call()
 
-    # 从响应中提取 token 使用量（不依赖回调，更可靠）
+    # 从响应中提取 token 使用量。CostTracker 使用请求上下文隔离，避免并发串账。
     try:
-        usage = response.usage_metadata
-        if usage:
-            from src.gateway.cost_tracker import cost_tracker
-            cost_tracker.log_usage(
-                "agent", "model",
-                usage.get("input_tokens", 0),
-                usage.get("output_tokens", 0),
-            )
+        from src.gateway.cost_tracker import cost_tracker
+        cost_tracker.log_response(response)
     except Exception:
         pass
 
@@ -112,7 +106,8 @@ async def supervisor_node(state: dict) -> dict:
 
         # 召回用户历史偏好
         try:
-            memories = await recall_memory("default", state.get("user_request", ""))
+            user_id = state.get("user_id", "anonymous")
+            memories = await recall_memory(user_id, state.get("user_request", ""))
             if memories:
                 state["long_term_memories"] = memories
                 print(f"[Supervisor] 召回 {len(memories)} 条用户偏好")
@@ -142,6 +137,9 @@ async def supervisor_node(state: dict) -> dict:
         if confidence < ANALYSIS_CONFIDENCE_THRESHOLD and iterations < ANALYST_MAX_ITERATIONS:
             trace_tracker.end_agent("supervisor")
             return {"next_agent": ANALYST, "supervisor_rounds": rounds}
+        if iterations >= ANALYST_MAX_ITERATIONS:
+            trace_tracker.end_agent("supervisor")
+            return {"next_agent": WRITER, "supervisor_rounds": rounds}
 
     llm = get_llm()
 
@@ -189,8 +187,14 @@ def _parse_next_agent(text: str, state: dict) -> str:
             fallback_counter.log("supervisor", "regex")
             return next_val
 
-    # 4. 兜底：根据状态推断
+    # 4. 兜底：根据状态按实际依赖顺序推断，避免过早跳到 Writer。
     fallback_counter.log("supervisor", "inference")
+    if not state.get("plan"):
+        return PLANNER
+    if not state.get("data_sufficient"):
+        return RESEARCHER
+    if not state.get("analysis"):
+        return ANALYST
     if not state.get("report_final"):
         return WRITER
     return "end"

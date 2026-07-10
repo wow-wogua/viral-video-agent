@@ -23,3 +23,4 @@ CHROMA_PORT: int = int(os.getenv("CHROMA_PORT", "8500"))
 EMBEDDING_MODEL: str = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
 
 REDIS_URL: str = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+MCP_SERVER_URL: str = os.getenv("MCP_SERVER_URL", "http://localhost:8001/sse")

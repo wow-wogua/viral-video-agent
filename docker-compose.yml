@@ -14,9 +14,11 @@ services:
       - FINETUNED_MODEL_URL=${FINETUNED_MODEL_URL:-http://host.docker.internal:8002/v1}
       - ANALYSIS_CONFIDENCE_THRESHOLD=${ANALYSIS_CONFIDENCE_THRESHOLD:-0.8}
       - PROMPT_VERSION=${PROMPT_VERSION:-v1}
+      - MCP_SERVER_URL=http://mcp-server:8001/sse
     depends_on:
       - chromadb
       - redis
+      - mcp-server
     volumes:
       - ./knowledge:/app/knowledge
 
@@ -51,6 +53,10 @@ services:
     ports:
       - "8001:8001"
     env_file: .env
+    environment:
+      - CHROMA_HOST=chromadb
+      - CHROMA_PORT=8000
+      - HF_ENDPOINT=https://hf-mirror.com
     depends_on:
       - chromadb
 

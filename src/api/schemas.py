@@ -4,6 +4,7 @@ import uuid
 class AnalyzeRequest(BaseModel):
     query: str
     session_id: str = None
+    user_id: str = None
     platforms: list[str] = Field(default_factory=lambda: ["douyin", "bilibili"])
 
     def model_post_init(self, __context):

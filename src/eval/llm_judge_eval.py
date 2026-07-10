@@ -163,9 +163,9 @@ def _summarize_raw_data(raw_data: list, max_items: int = 3) -> str:
     return "\n".join(summary_parts)
 
 
-async def judge_report(query: str, report: str, plan: list, raw_data: list) -> dict:
-    """用 LLM-as-Judge 对一份报告打分。"""
-    llm = get_llm()
+async def _judge_once(query: str, report: str, plan: list, raw_data: list) -> dict:
+    """以 temperature=0 完成一次 Judge 评分。"""
+    llm = get_llm(temperature=0.0)
 
     prompt = JUDGE_PROMPT_TEMPLATE.format(
         query=query,
@@ -199,7 +199,45 @@ async def judge_report(query: str, report: str, plan: list, raw_data: list) -> d
         return scores
 
 
-async def run_single_case(case: dict, graph, case_index: int, total: int) -> dict:
+async def judge_report(
+    query: str,
+    report: str,
+    plan: list,
+    raw_data: list,
+    repeats: int = 3,
+) -> dict:
+    """重复评分并按维度取均值。repeats=1 可复现早期单次试验。"""
+    repeats = max(1, repeats)
+    runs = []
+    for _ in range(repeats):
+        runs.append(await _judge_once(query, report, plan, raw_data))
+
+    aggregated = {}
+    for dim_key in JUDGE_DIMENSIONS:
+        values = []
+        reasons = []
+        for run in runs:
+            item = run.get(dim_key, {})
+            score = item.get("score", 0) if isinstance(item, dict) else 0
+            if score > 0:
+                values.append(float(score))
+                reason = item.get("reason", "")
+                if reason:
+                    reasons.append(reason)
+        aggregated[dim_key] = {
+            "score": round(sum(values) / len(values), 2) if values else 0,
+            "reason": f"{repeats} 次评分均值。" + (reasons[0] if reasons else ""),
+        }
+    return aggregated
+
+
+async def run_single_case(
+    case: dict,
+    graph,
+    case_index: int,
+    total: int,
+    judge_repeats: int = 3,
+) -> dict:
     """跑单条用例：运行系统 → 评分 → 返回结果。"""
     case_id = case.get("id", f"case-{case_index+1}")
     query = case["query"]
@@ -262,7 +300,7 @@ async def run_single_case(case: dict, graph, case_index: int, total: int) -> dic
 
     # 2. LLM-as-Judge 评分
     print(f"  报告长度: {len(report)} 字, 耗时: {latency:.1f}s, 开始评分...")
-    scores = await judge_report(query, report, plan, raw_data)
+    scores = await judge_report(query, report, plan, raw_data, repeats=judge_repeats)
 
     # 计算平均分
     valid_scores = [v["score"] for v in scores.values() if isinstance(v, dict) and v.get("score", 0) > 0]
@@ -363,8 +401,14 @@ def _aggregate_results(results: list) -> dict:
     }
 
 
-async def run_eval(cases: list = None, limit: int = None, output_path: str = None):
+async def run_eval(
+    cases: list = None,
+    limit: int = None,
+    output_path: str = None,
+    judge_repeats: int = 3,
+):
     """主评测入口。"""
+    judge_repeats = max(1, judge_repeats)
     if cases is None:
         cases = BUILTIN_CASES
     if limit:
@@ -374,13 +418,14 @@ async def run_eval(cases: list = None, limit: int = None, output_path: str = Non
     print(f"LLM-as-Judge 评测框架")
     print(f"用例数: {total}")
     print(f"评分维度: {', '.join(JUDGE_DIMENSIONS.keys())}")
+    print(f"Judge 条件: temperature=0, 每份报告重复 {judge_repeats} 次取均值")
     print()
 
     graph = build_graph()
     results = []
 
     for i, case in enumerate(cases):
-        result = await run_single_case(case, graph, i, total)
+        result = await run_single_case(case, graph, i, total, judge_repeats=judge_repeats)
         results.append(result)
         # 避免限流
         if i < total - 1:
@@ -395,6 +440,8 @@ async def run_eval(cases: list = None, limit: int = None, output_path: str = Non
             "version": "1.0",
             "dimensions": list(JUDGE_DIMENSIONS.keys()),
             "total_cases": total,
+            "judge_temperature": 0.0,
+            "judge_repeats": judge_repeats,
             "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
         },
         "summary": summary,
@@ -447,7 +494,7 @@ def load_cases_from_file(path: str) -> list:
 
 
 def import_tau_bench_cases() -> list:
-    """将 tau_bench.py 的 18 条用例转换为 LLM-as-Judge 评测格式。"""
+    """将 18 条 tau-bench-inspired 冒烟用例转换为 Judge 格式。"""
     from src.eval.tau_bench import E2E_CASES
     converted = []
     for i, case in enumerate(E2E_CASES):
@@ -456,7 +503,7 @@ def import_tau_bench_cases() -> list:
             "query": case["query"],
             "category": case.get("category", "unknown"),
             "tags": case.get("platforms", ["bilibili"]),
-            "source": "tau-bench",
+            "source": "tau-bench-inspired",
         })
     return converted
 
@@ -468,6 +515,7 @@ if __name__ == "__main__":
     parser.add_argument("--output", type=str, help="输出 JSON 文件路径")
     parser.add_argument("--import-tau", action="store_true", help="导入 tau-bench 的 18 条用例")
     parser.add_argument("--all", action="store_true", help="跑内置 + tau-bench 全部用例")
+    parser.add_argument("--judge-repeats", type=int, default=3, help="每份报告重复评分次数，默认 3")
     args = parser.parse_args()
 
     cases = None
@@ -481,4 +529,9 @@ if __name__ == "__main__":
         cases = BUILTIN_CASES + import_tau_bench_cases()
         print(f"内置 {len(BUILTIN_CASES)} + tau-bench {len(import_tau_bench_cases())} = {len(cases)} 条用例")
 
-    asyncio.run(run_eval(cases=cases, limit=args.limit, output_path=args.output))
+    asyncio.run(run_eval(
+        cases=cases,
+        limit=args.limit,
+        output_path=args.output,
+        judge_repeats=args.judge_repeats,
+    ))

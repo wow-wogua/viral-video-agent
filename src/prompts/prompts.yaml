@@ -49,7 +49,9 @@ versions:
       可用工具:
       - search_videos(keyword, platforms, limit): 搜索视频数据。keyword=搜索关键词，platforms=平台列表，limit=返回数量
       - rag_search(query, top_k): 从知识库检索参考文档。query=检索内容，top_k=返回数量
+      - get_transcript(video_url): 获取视频转写。video_url=视频链接
       - get_trend_data(video_id, platform): 获取视频历史趋势数据。video_id=视频ID，platform=平台名
+      - 无需工具: 如果当前步骤不需要调用工具，输出 {{"tool": "none", "params": {{}}}}
 
       输出JSON: {{"tool": "工具名", "params": {{"参数名": "值"}}}}
       只输出JSON，不要其他内容。
@@ -76,6 +78,11 @@ versions:
 
       {extra}
 
+      事实约束:
+      - 只能引用视频数据中真实存在的数值和字段
+      - 数据缺失时明确写“数据不足”，不要编造占比、提升幅度或行业平均值
+      - 不要把单个样本直接概括为普遍规律
+
       输出JSON: {{"summary": "...", "topic": "...", "insights": ["..."], "confidence": 0.0-1.0}}
 
     # ── Writer 报告生成（初稿）──
@@ -85,6 +92,11 @@ versions:
       用户查询主题: {user_request}
       分析结果：{analysis}
       原始数据：{raw_data}
+
+      事实约束：
+      - 只能引用原始数据和分析结果中真实存在的数字
+      - 缺少播放、点赞、评论等数据时明确说明局限，不得补写精确比例
+      - 区分“数据观察”“推测”和“建议”，不要把推测写成已验证结论
 
       要求:
       1. 报告必须与用户查询的主题紧密相关，不要写泛泛的通用内容

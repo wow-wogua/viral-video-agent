@@ -3,6 +3,7 @@ import type { AnalysisRecord } from '@/lib/mock-data';
 export interface AnalyzeRequest {
   query: string;
   session_id?: string;
+  user_id?: string;
   platforms?: string[];
 }
 
@@ -27,11 +28,24 @@ export interface SSEEvent {
   prompt_version?: string;
 }
 
+function getOrCreateUserId(): string | undefined {
+  if (typeof window === 'undefined') return undefined;
+  const key = 'viral-video-agent-user-id';
+  let userId = window.localStorage.getItem(key);
+  if (!userId) {
+    userId = typeof crypto !== 'undefined' && 'randomUUID' in crypto
+      ? crypto.randomUUID()
+      : `user-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    window.localStorage.setItem(key, userId);
+  }
+  return userId;
+}
+
 export async function analyzeSync(query: string, platforms: string[], sessionId: string): Promise<AnalyzeResponse> {
   const res = await fetch('/api/analyze', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ query, platforms, session_id: sessionId }),
+    body: JSON.stringify({ query, platforms, session_id: sessionId, user_id: getOrCreateUserId() }),
   });
   if (!res.ok) throw new Error('Analysis failed');
   return res.json();
@@ -49,7 +63,7 @@ export function analyzeStream(
   fetch('/api/analyze/stream', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ query, platforms, session_id: sessionId }),
+    body: JSON.stringify({ query, platforms, session_id: sessionId, user_id: getOrCreateUserId() }),
     signal: controller.signal,
   })
     .then(async (res) => {

@@ -6,9 +6,55 @@ from src.mcp.client import call_tool
 from src.utils.fallback_counter import fallback_counter
 from src.utils.trace_tracker import trace_tracker
 from src.prompts.manager import prompt_manager
+from src.config import MCP_SERVER_URL
 
-# MCP Client 配置
-MCP_SERVER_URL = "http://localhost:8001/sse"
+
+ALLOWED_TOOLS = {"search_videos", "rag_search", "get_transcript", "get_trend_data"}
+
+
+def _parse_text_content(text: str):
+    try:
+        return json.loads(text)
+    except (json.JSONDecodeError, TypeError):
+        return text
+
+
+def _unwrap_mcp_result(result):
+    """把 MCP CallToolResult 转为项目内部使用的 list/dict/string。"""
+    for attr in ("structured_content", "structuredContent"):
+        value = getattr(result, attr, None)
+        if value is not None:
+            return value
+
+    content = getattr(result, "content", None)
+    if not isinstance(content, list):
+        return result
+
+    values = []
+    for block in content:
+        text = getattr(block, "text", None)
+        if text is None and isinstance(block, dict):
+            text = block.get("text")
+        if text is not None:
+            values.append(_parse_text_content(text))
+
+    if len(values) == 1:
+        return values[0]
+    flattened = []
+    for value in values:
+        if isinstance(value, list):
+            flattened.extend(value)
+        else:
+            flattened.append(value)
+    return flattened
+
+
+def _as_list(value) -> list:
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return value
+    return [value]
 
 
 async def call_tool_via_mcp(tool_name: str, params: dict):
@@ -21,7 +67,7 @@ async def call_tool_via_mcp(tool_name: str, params: dict):
             async with ClientSession(read, write) as session:
                 await session.initialize()
                 result = await session.call_tool(tool_name, params)
-                return result
+                return _unwrap_mcp_result(result)
     except Exception as e:
         print(f"[Researcher] MCP调用失败，回退到直接调用: {e}")
         return await call_tool(tool_name, params)
@@ -56,20 +102,26 @@ async def researcher_node(state: AgentState) -> dict:
         decision = json.loads(clean)
         tool_name = decision.get("tool", "search_videos")
         params = decision.get("params", params)
+        if tool_name in (None, "none"):
+            tool_name = "none"
+        elif tool_name not in ALLOWED_TOOLS:
+            raise ValueError(f"不支持的工具: {tool_name}")
         if tool_name == "search_videos" and not params.get("platforms"):
             params["platforms"] = platforms
         fallback_counter.log("researcher", "json")
         print(f"[Researcher] LLM选择工具: {tool_name}")
-    except (json.JSONDecodeError, KeyError) as e:
+    except (json.JSONDecodeError, KeyError, ValueError, TypeError) as e:
         fallback_counter.log("researcher", "default")
         print(f"[Researcher] LLM输出解析失败，使用默认: {e}")
 
-    raw_data = await call_tool_via_mcp(tool_name, params)
+    raw_data = [] if tool_name == "none" else _as_list(await call_tool_via_mcp(tool_name, params))
+    existing_data = state.get("raw_data", [])
+    completed_all_steps = current_step + 1 >= len(plan)
 
     trace_tracker.end_agent("researcher")
     return {
         "raw_data": raw_data,
         "search_queries_used": [task],
-        "data_sufficient": len(raw_data) > 0,
+        "data_sufficient": bool(existing_data or raw_data) or completed_all_steps,
         "current_step": current_step + 1,
     }

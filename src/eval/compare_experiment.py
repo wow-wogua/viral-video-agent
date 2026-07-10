@@ -1,7 +1,8 @@
 """
 多Agent vs 单Agent 对比实验
 ============================
-跑相同测试用例，对比 5-Agent 方案和单 Agent Baseline 的质量/成本/延迟。
+跑相同自建用例，对比 5-Agent 方案和单 Agent Baseline 的质量/成本/延迟。
+结果属于小样本内部试验，不代表通用基准或统计显著性结论。
 
 用法:
     python -m src.eval.compare_experiment --limit 3

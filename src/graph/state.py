@@ -1,16 +1,18 @@
+from operator import add
 from typing import TypedDict, Annotated
 from langgraph.graph import add_messages
 
 
 class AgentState(TypedDict, total=False):
+    user_id: str
     user_request: str
     platforms: list[str]
     next_agent: str
     task_complete: bool
     plan: list[str]
     current_step: int
-    raw_data: list[dict]
-    search_queries_used: list[str]
+    raw_data: Annotated[list, add]
+    search_queries_used: Annotated[list[str], add]
     data_sufficient: bool
     analysis: dict
     analysis_confidence: float
