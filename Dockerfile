@@ -11,7 +11,7 @@ ENV HF_ENDPOINT=https://hf-mirror.com
 # 先装依赖（利用 Docker 缓存，依赖不变时不会重新装）
 COPY pyproject.toml .
 RUN pip install --no-cache-dir langgraph langchain-core langchain-anthropic langchain-openai \
-    fastapi uvicorn python-dotenv httpx aiosqlite chromadb tiktoken mcp "celery[redis]" redis pyyaml
+    fastapi uvicorn python-dotenv httpx aiosqlite chromadb tiktoken mcp redis pyyaml
 
 COPY . .
 

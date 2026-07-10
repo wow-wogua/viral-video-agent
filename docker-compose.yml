@@ -54,7 +54,7 @@ services:
     depends_on:
       - chromadb
 
-  # --- 缓存 / 消息队列 ---
+  # --- 缓存 / 历史记录 ---
   redis:
     image: redis:7-alpine
     ports:
