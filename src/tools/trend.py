@@ -1,7 +1,7 @@
 """
 历史趋势数据工具（飞瓜 API 占位符）
 ====================================
-当前使用 mock 数据，接入飞瓜 API Key 后替换 FEIGUO_API_KEY 即可。
+真实数据源尚未接入。默认返回 unavailable；只有显式开启 ENABLE_MOCK_TOOLS 才生成演示数据。
 
 飞瓜 API 文档参考：https://www.feigua.cn/api
 接口：GET /api/video/trend
@@ -12,6 +12,7 @@
 import os
 import random
 from datetime import datetime, timedelta
+from src.config import ENABLE_MOCK_TOOLS
 
 FEIGUO_API_KEY = os.getenv("FEIGUO_API_KEY", "")
 
@@ -61,9 +62,9 @@ async def get_trend_data(video_id: str, platform: str = "bilibili") -> dict:
         趋势数据字典，含每日播放量/点赞/评论和汇总
     """
     if not video_id:
-        return {"error": "video_id is required", "source": "mock"}
+        return {"error": "video_id is required", "source": "unavailable"}
 
-    # ── 飞瓜 API 接入点（当前为 mock）──
+    # ── 真实 Provider 接入点（当前未实现）──
     # 接入时替换下方代码：
     #
     # if FEIGUO_API_KEY:
@@ -79,6 +80,14 @@ async def get_trend_data(video_id: str, platform: str = "bilibili") -> dict:
     #             return resp.json()
     #         return {"error": f"Feigua API error: {resp.status_code}", "source": "feigua"}
 
-    # Mock 数据
-    print(f"[trend] 使用 mock 数据（飞瓜 API Key 未配置）")
-    return _generate_mock_trend(video_id, platform)
+    if ENABLE_MOCK_TOOLS:
+        print("[trend] ENABLE_MOCK_TOOLS=true，返回仅供演示的 mock 数据")
+        return _generate_mock_trend(video_id, platform)
+
+    print("[trend] 真实趋势数据源未接入，拒绝生成随机 mock 数据")
+    return {
+        "video_id": video_id,
+        "platform": platform,
+        "source": "unavailable",
+        "error": "real trend data provider is not configured",
+    }

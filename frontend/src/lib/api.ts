@@ -10,12 +10,15 @@ export interface AnalyzeRequest {
 export interface AnalyzeResponse {
   session_id: string;
   status: string;
+  termination_reason?: string;
   report: string;
   plan: string[];
 }
 
 export interface SSEEvent {
   agent: string;
+  status?: string;
+  termination_reason?: string;
   output?: string;
   session_id?: string;
   report?: string;
@@ -103,18 +106,24 @@ export function analyzeStream(
 }
 
 export async function getTaskStatus(sessionId: string) {
-  const res = await fetch(`/api/sessions/${sessionId}/status`);
+  const userId = getOrCreateUserId();
+  const query = userId ? `?user_id=${encodeURIComponent(userId)}` : '';
+  const res = await fetch(`/api/sessions/${sessionId}/status${query}`);
   return res.json();
 }
 
 export async function getHistory(): Promise<{ records: AnalysisRecord[]; source: string }> {
-  const res = await fetch('/api/history');
+  const userId = getOrCreateUserId();
+  const query = userId ? `?user_id=${encodeURIComponent(userId)}` : '';
+  const res = await fetch(`/api/history${query}`);
   if (!res.ok) return { records: [], source: 'error' };
   return res.json();
 }
 
 export async function getHistoryDetail(sessionId: string): Promise<AnalysisRecord | null> {
-  const res = await fetch(`/api/history/${sessionId}`);
+  const userId = getOrCreateUserId();
+  const query = userId ? `?user_id=${encodeURIComponent(userId)}` : '';
+  const res = await fetch(`/api/history/${sessionId}${query}`);
   if (!res.ok) return null;
   const data = await res.json();
   if (data.error) return null;

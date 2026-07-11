@@ -61,13 +61,18 @@ class PromptManager:
             填充后的 Prompt 字符串
         """
         template = self.version_info.get(agent, "")
+        if not template and self.current_version != "v1":
+            template = self._data.get("versions", {}).get("v1", {}).get(agent, "")
         if not template:
             raise ValueError(f"Prompt 模板不存在: agent={agent}, version={self.current_version}")
         return template.format(**kwargs)
 
     def get_raw(self, agent: str) -> str:
         """获取原始模板（不填充变量）。"""
-        return self.version_info.get(agent, "")
+        template = self.version_info.get(agent, "")
+        if not template and self.current_version != "v1":
+            template = self._data.get("versions", {}).get("v1", {}).get(agent, "")
+        return template
 
     def list_versions(self) -> list[str]:
         """列出所有可用版本。"""

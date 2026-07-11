@@ -118,7 +118,12 @@ async def supervisor_node(state: dict) -> dict:
     if rounds > MAX_SUPERVISOR_ROUNDS:
         print(f"[Supervisor] 达到最大轮数 {MAX_SUPERVISOR_ROUNDS}，强制结束")
         trace_tracker.end_agent("supervisor")
-        return {"next_agent": "end", "supervisor_rounds": rounds}
+        return {
+            "next_agent": "end",
+            "supervisor_rounds": rounds,
+            "task_complete": True,
+            "termination_reason": "max_supervisor_rounds",
+        }
 
     # 快速检查：任务已完成
     if state.get("task_complete"):

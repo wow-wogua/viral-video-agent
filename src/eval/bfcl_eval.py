@@ -1,6 +1,8 @@
 import asyncio
 import json
 import sys
+import time
+from pathlib import Path
 from src.agents.supervisor import get_llm, extract_text
 
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -220,15 +222,17 @@ def check_match(actual: dict, expected_tool: str | None, expected_params: dict) 
             elif actual_value != expected_value:
                 params_correct = False
                 break
-    return tool_correct, tool_correct and params_correct
+    return tool_correct, params_correct
 
 
-async def eval_tool_accuracy():
+async def eval_tool_accuracy(output_path: str | None = None):
     """评估自建 BFCL 风格用例的工具名与参数准确率。"""
     llm = get_llm()
     correct_tool = 0
+    correct_params = 0
     correct_full = 0
     total = len(TEST_CASES)
+    param_total = sum(case["expected_tool"] is not None for case in TEST_CASES)
     results = []
 
     for i, case in enumerate(TEST_CASES):
@@ -269,13 +273,16 @@ async def eval_tool_accuracy():
             actual_tool = result.get("tool")
             expected_tool = case["expected_tool"]
 
-            tool_correct, fully_correct = check_match(
+            tool_correct, params_correct = check_match(
                 result,
                 expected_tool,
                 case.get("expected_params", {}),
             )
+            fully_correct = tool_correct and params_correct
             if tool_correct:
                 correct_tool += 1
+            if expected_tool is not None and params_correct:
+                correct_params += 1
             if fully_correct:
                 correct_full += 1
             status = "✅" if fully_correct else ("⚠️" if tool_correct else "❌")
@@ -286,7 +293,10 @@ async def eval_tool_accuracy():
                 "input": case["input"],
                 "expected": expected_tool,
                 "actual": actual_tool,
+                "expected_params": case.get("expected_params", {}),
+                "actual_params": result.get("params", {}),
                 "tool_correct": tool_correct,
+                "params_correct": params_correct,
                 "fully_correct": fully_correct,
             })
 
@@ -297,29 +307,48 @@ async def eval_tool_accuracy():
                 "input": case["input"],
                 "expected": case["expected_tool"],
                 "actual": "parse_error",
+                "expected_params": case.get("expected_params", {}),
+                "actual_params": {},
                 "tool_correct": False,
+                "params_correct": False,
                 "fully_correct": False,
             })
 
     tool_accuracy = correct_tool / total * 100
+    params_accuracy = correct_params / param_total * 100
     full_accuracy = correct_full / total * 100
     print(f"\n{'='*50}")
     print(f"工具名准确率: {correct_tool}/{total} ({tool_accuracy:.1f}%)")
+    print(f"参数准确率: {correct_params}/{param_total} ({params_accuracy:.1f}%)")
     print(f"完全准确率: {correct_full}/{total} ({full_accuracy:.1f}%)")
     print(f"{'='*50}")
 
     # 输出 JSON 结果便于后续分析
     summary = {
         "tool_correct": correct_tool,
+        "params_correct": correct_params,
         "full_correct": correct_full,
         "total": total,
+        "param_total": param_total,
         "tool_accuracy": tool_accuracy,
+        "params_accuracy": params_accuracy,
         "full_accuracy": full_accuracy,
         "details": results,
     }
     print(json.dumps(summary, ensure_ascii=False, indent=2))
+    if output_path is None:
+        output_path = f"src/eval/results/bfcl_style_{time.strftime('%Y%m%d_%H%M%S')}.json"
+    output_file = Path(output_path)
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+    with open(output_file, "w", encoding="utf-8") as f:
+        json.dump(summary, f, ensure_ascii=False, indent=2)
+    print(f"结果已保存: {output_file}")
     return summary
 
 
 if __name__ == "__main__":
-    asyncio.run(eval_tool_accuracy())
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--output", help="结果 JSON 路径；默认写入 src/eval/results")
+    args = parser.parse_args()
+    asyncio.run(eval_tool_accuracy(args.output))

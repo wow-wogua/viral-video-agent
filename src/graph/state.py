@@ -21,6 +21,7 @@ class AgentState(TypedDict, total=False):
     report_final: str
     report_revision_count: int
     supervisor_rounds: int
+    termination_reason: str
     rag_context: list[str]
     long_term_memories: list[str]
     messages: Annotated[list, add_messages]

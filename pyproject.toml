@@ -4,10 +4,10 @@ version = "0.1.0"
 description = "短视频平台爆款视频分析多智能体系统"
 requires-python = ">=3.10"
 dependencies = [
-    "langgraph>=0.2.0",
+    "langgraph>=0.2.0,<1.1.0",
     "langchain-core>=0.3.0,<1.0.0",
-    "langchain-anthropic>=0.3.0",
-    "langchain-openai>=0.3.0",
+    "langchain-anthropic>=0.3.0,<1.0.0",
+    "langchain-openai>=0.3.0,<1.0.0",
     "fastapi>=0.115.0",
     "uvicorn[standard]>=0.30.0",
     "python-dotenv>=1.0.0",

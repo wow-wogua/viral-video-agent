@@ -8,12 +8,12 @@ RUN pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
 # HuggingFace 使用镜像
 ENV HF_ENDPOINT=https://hf-mirror.com
 
-# 先装依赖（利用 Docker 缓存，依赖不变时不会重新装）
 COPY pyproject.toml .
-RUN pip install --no-cache-dir langgraph langchain-core langchain-anthropic langchain-openai \
-    fastapi uvicorn python-dotenv httpx aiosqlite chromadb tiktoken mcp redis pyyaml
+RUN python -c "import tomllib; print('\\n'.join(tomllib.load(open('pyproject.toml', 'rb'))['project']['dependencies']))" > /tmp/requirements.txt \
+    && pip install --no-cache-dir -r /tmp/requirements.txt
 
 COPY . .
+RUN pip install --no-cache-dir --no-deps .
 
 EXPOSE 8000
 

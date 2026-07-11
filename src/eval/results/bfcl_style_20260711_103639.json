@@ -1,0 +1,327 @@
+{
+  "tool_correct": 30,
+  "params_correct": 14,
+  "full_correct": 14,
+  "total": 35,
+  "param_total": 31,
+  "tool_accuracy": 85.71428571428571,
+  "params_accuracy": 45.16129032258064,
+  "full_accuracy": 40.0,
+  "details": [
+    {
+      "case": 1,
+      "input": "搜索B站美妆类视频",
+      "expected": "search_videos",
+      "actual": "search_videos",
+      "tool_correct": true,
+      "params_correct": false,
+      "fully_correct": false
+    },
+    {
+      "case": 2,
+      "input": "搜索B站美食类视频TOP10",
+      "expected": "search_videos",
+      "actual": "search_videos",
+      "tool_correct": true,
+      "params_correct": true,
+      "fully_correct": true
+    },
+    {
+      "case": 3,
+      "input": "帮我找B站最近的科技区热门视频",
+      "expected": "search_videos",
+      "actual": "search_videos",
+      "tool_correct": true,
+      "params_correct": true,
+      "fully_correct": true
+    },
+    {
+      "case": 4,
+      "input": "看看最近有什么热门视频",
+      "expected": "search_videos",
+      "actual": "search_videos",
+      "tool_correct": true,
+      "params_correct": false,
+      "fully_correct": false
+    },
+    {
+      "case": 5,
+      "input": "分析B站游戏区最近的爆款",
+      "expected": "search_videos",
+      "actual": "search_videos",
+      "tool_correct": true,
+      "params_correct": true,
+      "fully_correct": true
+    },
+    {
+      "case": 6,
+      "input": "找一下B站生活区点赞最高的视频",
+      "expected": "search_videos",
+      "actual": "search_videos",
+      "tool_correct": true,
+      "params_correct": false,
+      "fully_correct": false
+    },
+    {
+      "case": 7,
+      "input": "获取B站热门排行榜前20名",
+      "expected": "search_videos",
+      "actual": "search_videos",
+      "tool_correct": true,
+      "params_correct": false,
+      "fully_correct": false
+    },
+    {
+      "case": 8,
+      "input": "帮我找B站音乐区的热门MV",
+      "expected": "search_videos",
+      "actual": "search_videos",
+      "tool_correct": true,
+      "params_correct": false,
+      "fully_correct": false
+    },
+    {
+      "case": 9,
+      "input": "分析B站舞蹈区最近的爆款视频",
+      "expected": "search_videos",
+      "actual": "search_videos",
+      "tool_correct": true,
+      "params_correct": true,
+      "fully_correct": true
+    },
+    {
+      "case": 10,
+      "input": "看看B站知识区有什么热门内容",
+      "expected": "search_videos",
+      "actual": "search_videos",
+      "tool_correct": true,
+      "params_correct": false,
+      "fully_correct": false
+    },
+    {
+      "case": 11,
+      "input": "找B站影视区最近的热门解说",
+      "expected": "search_videos",
+      "actual": "search_videos",
+      "tool_correct": true,
+      "params_correct": false,
+      "fully_correct": false
+    },
+    {
+      "case": 12,
+      "input": "分析B站动画区的热门番剧",
+      "expected": "search_videos",
+      "actual": "search_videos",
+      "tool_correct": true,
+      "params_correct": false,
+      "fully_correct": false
+    },
+    {
+      "case": 13,
+      "input": "看看B站汽车区有什么测评视频",
+      "expected": "search_videos",
+      "actual": "search_videos",
+      "tool_correct": true,
+      "params_correct": false,
+      "fully_correct": false
+    },
+    {
+      "case": 14,
+      "input": "找B站体育区最近的赛事集锦",
+      "expected": "search_videos",
+      "actual": "search_videos",
+      "tool_correct": true,
+      "params_correct": false,
+      "fully_correct": false
+    },
+    {
+      "case": 15,
+      "input": "分析B站搞笑区的热门视频",
+      "expected": "search_videos",
+      "actual": "search_videos",
+      "tool_correct": true,
+      "params_correct": true,
+      "fully_correct": true
+    },
+    {
+      "case": 16,
+      "input": "检索知识库中关于爆款公式的文档",
+      "expected": "rag_search",
+      "actual": "rag_search",
+      "tool_correct": true,
+      "params_correct": true,
+      "fully_correct": true
+    },
+    {
+      "case": 17,
+      "input": "有没有历史爆款分析报告可以参考",
+      "expected": "rag_search",
+      "actual": "rag_search",
+      "tool_correct": true,
+      "params_correct": false,
+      "fully_correct": false
+    },
+    {
+      "case": 18,
+      "input": "查一下抖音的算法规则",
+      "expected": "rag_search",
+      "actual": "rag_search",
+      "tool_correct": true,
+      "params_correct": true,
+      "fully_correct": true
+    },
+    {
+      "case": 19,
+      "input": "知识库里有没有关于AIDA框架的内容",
+      "expected": "rag_search",
+      "actual": "rag_search",
+      "tool_correct": true,
+      "params_correct": true,
+      "fully_correct": true
+    },
+    {
+      "case": 20,
+      "input": "帮我找一下短视频运营的方法论",
+      "expected": "rag_search",
+      "actual": "rag_search",
+      "tool_correct": true,
+      "params_correct": false,
+      "fully_correct": false
+    },
+    {
+      "case": 21,
+      "input": "有没有关于竞品分析的文档",
+      "expected": "rag_search",
+      "actual": "rag_search",
+      "tool_correct": true,
+      "params_correct": true,
+      "fully_correct": true
+    },
+    {
+      "case": 22,
+      "input": "检索一下2024年的行业趋势报告",
+      "expected": "rag_search",
+      "actual": "rag_search",
+      "tool_correct": true,
+      "params_correct": false,
+      "fully_correct": false
+    },
+    {
+      "case": 23,
+      "input": "知识库里有没有关于钩子设计的内容",
+      "expected": "rag_search",
+      "actual": "rag_search",
+      "tool_correct": true,
+      "params_correct": true,
+      "fully_correct": true
+    },
+    {
+      "case": 24,
+      "input": "把这个视频的文案转写出来",
+      "expected": "get_transcript",
+      "actual": "get_transcript",
+      "tool_correct": true,
+      "params_correct": false,
+      "fully_correct": false
+    },
+    {
+      "case": 25,
+      "input": "获取这个视频的字幕内容",
+      "expected": "get_transcript",
+      "actual": "get_transcript",
+      "tool_correct": true,
+      "params_correct": true,
+      "fully_correct": true
+    },
+    {
+      "case": 26,
+      "input": "帮我转写一下这个视频的口播文案",
+      "expected": "get_transcript",
+      "actual": "parse_error",
+      "tool_correct": false,
+      "params_correct": false,
+      "fully_correct": false
+    },
+    {
+      "case": 27,
+      "input": "查询BV1abc最近7天的播放趋势",
+      "expected": "get_trend_data",
+      "actual": "get_trend_data",
+      "tool_correct": true,
+      "params_correct": true,
+      "fully_correct": true
+    },
+    {
+      "case": 28,
+      "input": "看看抖音视频712345最近的点赞走势",
+      "expected": "get_trend_data",
+      "actual": "get_trend_data",
+      "tool_correct": true,
+      "params_correct": true,
+      "fully_correct": true
+    },
+    {
+      "case": 29,
+      "input": "帮我查一下BV9xyz的历史热度",
+      "expected": "get_trend_data",
+      "actual": "get_trend_data",
+      "tool_correct": true,
+      "params_correct": false,
+      "fully_correct": false
+    },
+    {
+      "case": 30,
+      "input": "快手视频889900最近评论有没有增长",
+      "expected": "get_trend_data",
+      "actual": "get_trend_data",
+      "tool_correct": true,
+      "params_correct": false,
+      "fully_correct": false
+    },
+    {
+      "case": 31,
+      "input": "查询B站视频BV7trend最近的数据变化",
+      "expected": "get_trend_data",
+      "actual": "get_trend_data",
+      "tool_correct": true,
+      "params_correct": true,
+      "fully_correct": true
+    },
+    {
+      "case": 32,
+      "input": "帮我总结一下分析结果",
+      "expected": null,
+      "actual": "rag_search",
+      "tool_correct": false,
+      "params_correct": false,
+      "fully_correct": false
+    },
+    {
+      "case": 33,
+      "input": "根据已有数据，给出运营建议",
+      "expected": null,
+      "actual": "rag_search",
+      "tool_correct": false,
+      "params_correct": false,
+      "fully_correct": false
+    },
+    {
+      "case": 34,
+      "input": "解释一下什么是爆款视频",
+      "expected": null,
+      "actual": "rag_search",
+      "tool_correct": false,
+      "params_correct": false,
+      "fully_correct": false
+    },
+    {
+      "case": 35,
+      "input": "帮我写一个短视频脚本大纲",
+      "expected": null,
+      "actual": "rag_search",
+      "tool_correct": false,
+      "params_correct": false,
+      "fully_correct": false
+    }
+  ]
+}

@@ -1,7 +1,9 @@
 import asyncio
 import json
+import re
 import sys
 import time
+from pathlib import Path
 from src.graph.builder import build_graph
 
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -148,20 +150,14 @@ E2E_CASES = [
 
 def check_rule(rule: str, result: dict) -> bool:
     """检查单条规则是否满足。"""
-    if rule == "report_final length > 200":
-        return len(result.get("report_final", "")) > 200
-    if rule == "report_final length > 500":
-        return len(result.get("report_final", "")) > 500
-    if rule == "report_final length > 800":
-        return len(result.get("report_final", "")) > 800
+    report_length_match = re.fullmatch(r"report_final length > (\d+)", rule)
+    if report_length_match:
+        return len(result.get("report_final", "")) > int(report_length_match.group(1))
     if rule == "report_final not empty":
         return bool(result.get("report_final"))
-    if rule == "plan has >= 2 steps":
-        return len(result.get("plan", [])) >= 2
-    if rule == "plan has >= 3 steps":
-        return len(result.get("plan", [])) >= 3
-    if rule == "plan has >= 4 steps":
-        return len(result.get("plan", [])) >= 4
+    plan_steps_match = re.fullmatch(r"plan has >= (\d+) steps", rule)
+    if plan_steps_match:
+        return len(result.get("plan", [])) >= int(plan_steps_match.group(1))
     if rule == "raw_data not empty":
         return bool(result.get("raw_data"))
     if rule == "analysis has confidence":
@@ -171,14 +167,15 @@ def check_rule(rule: str, result: dict) -> bool:
     return False
 
 
-async def eval_e2e():
+async def eval_e2e(limit: int | None = None, output_path: str | None = None):
     """运行自建 tau-bench-inspired 端到端冒烟检查 + 性能统计。"""
     graph = build_graph()
+    cases = E2E_CASES[:limit] if limit else E2E_CASES
     success = 0
-    total = len(E2E_CASES)
+    total = len(cases)
     all_results = []
 
-    for i, case in enumerate(E2E_CASES):
+    for i, case in enumerate(cases):
         print(f"\n{'='*50}")
         print(f"测试 {i+1}/{total} [{case['category']}]: {case['query']}")
         print(f"{'='*50}")
@@ -187,6 +184,7 @@ async def eval_e2e():
         try:
             result = await graph.ainvoke(
                 {
+                    "user_id": f"eval-user-{i}",
                     "user_request": case["query"],
                     "platforms": case.get("platforms", ["bilibili"]),
                     "task_complete": False,
@@ -202,20 +200,20 @@ async def eval_e2e():
             latency = time.time() - start_time
 
             # 检查必需字段
-            fields_ok = True
+            missing_fields = []
             for field in case["expect_fields"]:
                 if not result.get(field):
                     print(f"  [FAIL] 缺少字段: {field}")
-                    fields_ok = False
+                    missing_fields.append(field)
 
             # 检查规则
-            rules_ok = True
+            failed_rules = []
             for rule in case.get("check_rules", []):
                 if not check_rule(rule, result):
                     print(f"  [FAIL] 规则未满足: {rule}")
-                    rules_ok = False
+                    failed_rules.append(rule)
 
-            case_pass = fields_ok and rules_ok
+            case_pass = not missing_fields and not failed_rules
             if case_pass:
                 success += 1
                 print(f"  [PASS] 通过")
@@ -233,6 +231,10 @@ async def eval_e2e():
                 "report_revision_count": result.get("report_revision_count", 0),
                 "report_length": len(result.get("report_final", "")),
                 "plan_steps": len(result.get("plan", [])),
+                "raw_data_count": len(result.get("raw_data", [])),
+                "termination_reason": result.get("termination_reason", ""),
+                "missing_fields": missing_fields,
+                "failed_rules": failed_rules,
             })
 
         except Exception as e:
@@ -277,8 +279,21 @@ async def eval_e2e():
         summary["avg_report_revision_count"] = round(sum(r.get("report_revision_count", 0) for r in passed_results) / len(passed_results), 1)
 
     print(json.dumps(summary, ensure_ascii=False, indent=2))
+    if output_path is None:
+        suffix = f"_{total}cases" if limit else ""
+        output_path = f"src/eval/results/tau_inspired_{time.strftime('%Y%m%d_%H%M%S')}{suffix}.json"
+    output_file = Path(output_path)
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+    with open(output_file, "w", encoding="utf-8") as f:
+        json.dump(summary, f, ensure_ascii=False, indent=2)
+    print(f"结果已保存: {output_file}")
     return summary
 
 
 if __name__ == "__main__":
-    asyncio.run(eval_e2e())
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--limit", type=int, help="只运行前 N 条；不传则运行全部 18 条")
+    parser.add_argument("--output", help="结果 JSON 路径；默认写入 src/eval/results")
+    args = parser.parse_args()
+    asyncio.run(eval_e2e(args.limit, args.output))

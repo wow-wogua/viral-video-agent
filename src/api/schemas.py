@@ -14,6 +14,7 @@ class AnalyzeRequest(BaseModel):
 class AnalyzeResponse(BaseModel):
     session_id: str
     status: str
+    termination_reason: str = ""
     report: str = ""
     plan: list[str] = Field(default_factory=list)
     cost: dict = Field(default_factory=dict)

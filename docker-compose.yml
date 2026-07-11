@@ -15,12 +15,14 @@ services:
       - ANALYSIS_CONFIDENCE_THRESHOLD=${ANALYSIS_CONFIDENCE_THRESHOLD:-0.8}
       - PROMPT_VERSION=${PROMPT_VERSION:-v1}
       - MCP_SERVER_URL=http://mcp-server:8001/sse
+      - ENABLE_MOCK_TOOLS=${ENABLE_MOCK_TOOLS:-false}
     depends_on:
       - chromadb
       - redis
       - mcp-server
     volumes:
       - ./knowledge:/app/knowledge
+      - embedding_cache:/root/.cache/chroma
 
   # --- 前端 ---
   frontend:
@@ -57,8 +59,11 @@ services:
       - CHROMA_HOST=chromadb
       - CHROMA_PORT=8000
       - HF_ENDPOINT=https://hf-mirror.com
+      - ENABLE_MOCK_TOOLS=${ENABLE_MOCK_TOOLS:-false}
     depends_on:
       - chromadb
+    volumes:
+      - embedding_cache:/root/.cache/chroma
 
   # --- 缓存 / 历史记录 ---
   redis:
@@ -83,3 +88,4 @@ services:
 volumes:
   chroma_data:
   redis_data:
+  embedding_cache:

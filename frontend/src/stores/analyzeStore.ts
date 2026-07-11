@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { mockRecords, type AnalysisRecord, type TraceInfo, type FallbackInfo } from '@/lib/mock-data';
+import type { AnalysisRecord, TraceInfo, FallbackInfo } from '@/lib/mock-data';
 
 interface AgentState {
   status: 'pending' | 'running' | 'completed' | 'error';
@@ -38,8 +38,8 @@ interface AnalyzeStore {
 }
 
 export const useAnalyzeStore = create<AnalyzeStore>((set, get) => ({
-  records: mockRecords,
-  currentRecord: mockRecords[0],
+  records: [],
+  currentRecord: null,
   agents: {
     planner: { status: 'pending', message: '' },
     researcher: { status: 'pending', message: '' },
