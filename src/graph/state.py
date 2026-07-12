@@ -7,11 +7,16 @@ class AgentState(TypedDict, total=False):
     user_id: str
     user_request: str
     platforms: list[str]
+    workflow_version: str
     next_agent: str
     task_complete: bool
     plan: list[str]
     current_step: int
     raw_data: Annotated[list, add]
+    research_tasks: list[dict]
+    tool_results: Annotated[list[dict], add]
+    evidence: Annotated[list[dict], add]
+    available_capabilities: list[dict]
     search_queries_used: Annotated[list[str], add]
     data_sufficient: bool
     analysis: dict

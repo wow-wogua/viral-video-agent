@@ -1,0 +1,202 @@
+{
+  "timestamp": "2026-07-12T10:47:12.755343",
+  "scope": "runtime-enabled capabilities only",
+  "split": "holdout",
+  "total": 13,
+  "tool_correct": 13,
+  "params_correct": 13,
+  "full_correct": 13,
+  "tool_accuracy": 100.0,
+  "params_accuracy": 100.0,
+  "full_accuracy": 100.0,
+  "details": [
+    {
+      "case": 1,
+      "input": "给我拿几条B站数码区近期热视频",
+      "kind": "tool_routing",
+      "expected_tool": "search_videos",
+      "actual_tool": "search_videos",
+      "actual_params": {
+        "keyword": "数码",
+        "platforms": [
+          "bilibili"
+        ],
+        "limit": 20
+      },
+      "tool_correct": true,
+      "params_correct": true,
+      "fully_correct": true,
+      "latency_ms": 7329.3
+    },
+    {
+      "case": 2,
+      "input": "B站体育区当前热门找15个",
+      "kind": "tool_routing",
+      "expected_tool": "search_videos",
+      "actual_tool": "search_videos",
+      "actual_params": {
+        "keyword": "体育",
+        "platforms": [
+          "bilibili"
+        ],
+        "limit": 15
+      },
+      "tool_correct": true,
+      "params_correct": true,
+      "fully_correct": true,
+      "latency_ms": 1772.4
+    },
+    {
+      "case": 3,
+      "input": "想复盘B站动画区爆款，先拉真实样本",
+      "kind": "tool_routing",
+      "expected_tool": "search_videos",
+      "actual_tool": "search_videos",
+      "actual_params": {
+        "keyword": "动画 热门",
+        "platforms": [
+          "bilibili"
+        ],
+        "limit": 20
+      },
+      "tool_correct": true,
+      "params_correct": true,
+      "fully_correct": true,
+      "latency_ms": 3640.8
+    },
+    {
+      "case": 4,
+      "input": "B站美食最近火什么，先找视频",
+      "kind": "tool_routing",
+      "expected_tool": "search_videos",
+      "actual_tool": "search_videos",
+      "actual_params": {
+        "keyword": "美食",
+        "platforms": [
+          "bilibili"
+        ],
+        "limit": 20
+      },
+      "tool_correct": true,
+      "params_correct": true,
+      "fully_correct": true,
+      "latency_ms": 2104.9
+    },
+    {
+      "case": 5,
+      "input": "找知识库里的标题写作框架",
+      "kind": "tool_routing",
+      "expected_tool": "rag_search",
+      "actual_tool": "rag_search",
+      "actual_params": {
+        "query": "bilibili 标题写作框架",
+        "top_k": 5
+      },
+      "tool_correct": true,
+      "params_correct": true,
+      "fully_correct": true,
+      "latency_ms": 1947.4
+    },
+    {
+      "case": 6,
+      "input": "参考一下账号定位方法论",
+      "kind": "tool_routing",
+      "expected_tool": "rag_search",
+      "actual_tool": "rag_search",
+      "actual_params": {
+        "query": "账号定位方法论",
+        "top_k": 5
+      },
+      "tool_correct": true,
+      "params_correct": true,
+      "fully_correct": true,
+      "latency_ms": 1931.8
+    },
+    {
+      "case": 7,
+      "input": "查B站流量分发规则的资料",
+      "kind": "tool_routing",
+      "expected_tool": "rag_search",
+      "actual_tool": "rag_search",
+      "actual_params": {
+        "query": "B站流量分发规则 算法 推荐机制",
+        "top_k": 5
+      },
+      "tool_correct": true,
+      "params_correct": true,
+      "fully_correct": true,
+      "latency_ms": 4645.1
+    },
+    {
+      "case": 8,
+      "input": "有没有短视频竞品复盘模板",
+      "kind": "tool_routing",
+      "expected_tool": "rag_search",
+      "actual_tool": "rag_search",
+      "actual_params": {
+        "query": "短视频竞品复盘模板 bilibili",
+        "top_k": 5
+      },
+      "tool_correct": true,
+      "params_correct": true,
+      "fully_correct": true,
+      "latency_ms": 1132.2
+    },
+    {
+      "case": 9,
+      "input": "基于上面的样本直接写结论",
+      "kind": "tool_routing",
+      "expected_tool": null,
+      "actual_tool": null,
+      "actual_params": {},
+      "tool_correct": true,
+      "params_correct": true,
+      "fully_correct": true,
+      "latency_ms": 1705.3
+    },
+    {
+      "case": 10,
+      "input": "不用检索，改写这段分析报告",
+      "kind": "tool_routing",
+      "expected_tool": null,
+      "actual_tool": null,
+      "actual_params": {},
+      "tool_correct": true,
+      "params_correct": true,
+      "fully_correct": true,
+      "latency_ms": 840.1
+    },
+    {
+      "case": 11,
+      "input": "直接解释互动率，不需要查资料",
+      "kind": "tool_routing",
+      "expected_tool": null,
+      "actual_tool": null,
+      "actual_params": {},
+      "tool_correct": true,
+      "params_correct": true,
+      "fully_correct": true,
+      "latency_ms": 1357.1
+    },
+    {
+      "case": 12,
+      "input": "搜快手最近的游戏热视频",
+      "kind": "entry_boundary",
+      "expected": "unsupported_platform",
+      "actual": "unsupported_platform",
+      "tool_correct": true,
+      "params_correct": true,
+      "fully_correct": true
+    },
+    {
+      "case": 13,
+      "input": "拉一批小红书近期家居爆款样本",
+      "kind": "entry_boundary",
+      "expected": "unsupported_platform",
+      "actual": "unsupported_platform",
+      "tool_correct": true,
+      "params_correct": true,
+      "fully_correct": true
+    }
+  ]
+}

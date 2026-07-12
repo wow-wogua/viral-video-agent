@@ -7,9 +7,18 @@ from src.agents.researcher import researcher_node
 from src.agents.analyst import analyst_node
 from src.agents.writer import writer_node
 from src.memory.short_term import get_checkpointer
+from src.config import GRAPH_VERSION
 
 
-def build_graph():
+def build_graph(version: str | None = None):
+    selected_version = (version or GRAPH_VERSION).lower()
+    if selected_version == "v2":
+        from src.graph.v2 import build_graph_v2
+
+        return build_graph_v2()
+    if selected_version != "v1":
+        raise ValueError(f"unsupported graph version: {selected_version}")
+
     graph = StateGraph(AgentState)
 
     graph.add_node(SUPERVISOR, supervisor_node)

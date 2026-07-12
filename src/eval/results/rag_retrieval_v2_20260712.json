@@ -1,0 +1,541 @@
+{
+  "total_cases": 28,
+  "answerable_cases": 28,
+  "coverage_gaps": 0,
+  "hit": 28,
+  "source_recall_at_5": 100.0,
+  "by_category": {
+    "platform_rules": {
+      "hit": 5,
+      "total": 5,
+      "rate": 100.0
+    },
+    "industry_methodology": {
+      "hit": 6,
+      "total": 6,
+      "rate": 100.0
+    },
+    "trend_data": {
+      "hit": 5,
+      "total": 5,
+      "rate": 100.0
+    },
+    "historical_reports": {
+      "hit": 5,
+      "total": 5,
+      "rate": 100.0
+    },
+    "competitor_analysis": {
+      "hit": 4,
+      "total": 4,
+      "rate": 100.0
+    },
+    "cross": {
+      "hit": 3,
+      "total": 3,
+      "rate": 100.0
+    }
+  },
+  "details": [
+    {
+      "case": 1,
+      "query": "抖音的推荐算法是什么原理",
+      "category": "platform_rules",
+      "answerable": true,
+      "hit": true,
+      "expected_sources": [
+        "抖音算法推荐机制详解"
+      ],
+      "retrieved_sources": [
+        "抖音算法推荐机制详解",
+        "B站流量池与推荐算法详解",
+        "B站推荐算法与UP主运营规则",
+        "抖音官方创作者服务入口说明",
+        "2025抖音流量密码与算法趋势"
+      ]
+    },
+    {
+      "case": 2,
+      "query": "B站的流量分配机制",
+      "category": "platform_rules",
+      "answerable": true,
+      "hit": true,
+      "expected_sources": [
+        "B站流量池与推荐算法详解",
+        "B站推荐算法与UP主运营规则"
+      ],
+      "retrieved_sources": [
+        "B站流量池与推荐算法详解",
+        "B站推荐算法与UP主运营规则",
+        "B站官方创作与规则入口说明",
+        "2025抖音流量密码与算法趋势",
+        "B站2025-2026趋势数据报告"
+      ]
+    },
+    {
+      "case": 3,
+      "query": "小红书的内容审核规则",
+      "category": "platform_rules",
+      "answerable": true,
+      "hit": true,
+      "expected_sources": [
+        "小红书官方创作者服务入口说明"
+      ],
+      "retrieved_sources": [
+        "抖音违规限流避坑指南",
+        "小红书官方创作者服务入口说明",
+        "B站爆款视频方法论",
+        "B站推荐算法与UP主运营规则",
+        "B站流量池与推荐算法详解"
+      ]
+    },
+    {
+      "case": 4,
+      "query": "快手的算法推荐逻辑",
+      "category": "platform_rules",
+      "answerable": true,
+      "hit": true,
+      "expected_sources": [
+        "快手算法与运营规则"
+      ],
+      "retrieved_sources": [
+        "快手算法与运营规则",
+        "快手官方创作者服务入口说明",
+        "快手公开财报趋势证据使用指南",
+        "短视频封面设计技巧",
+        "短视频爆款选题公式"
+      ]
+    },
+    {
+      "case": 5,
+      "query": "各平台的违规内容标准是什么",
+      "category": "platform_rules",
+      "answerable": true,
+      "hit": true,
+      "expected_sources": [
+        "抖音违规限流避坑指南",
+        "快手算法与运营规则"
+      ],
+      "retrieved_sources": [
+        "抖音违规限流避坑指南",
+        "B站爆款视频方法论",
+        "B站推荐算法与UP主运营规则",
+        "B站流量池与推荐算法详解",
+        "抖音官方创作者服务入口说明"
+      ]
+    },
+    {
+      "case": 6,
+      "query": "爆款视频的开头怎么写",
+      "category": "industry_methodology",
+      "answerable": true,
+      "hit": true,
+      "expected_sources": [
+        "短视频脚本结构模板",
+        "B站爆款视频方法论",
+        "口播视频爆款公式"
+      ],
+      "retrieved_sources": [
+        "抖音爆款方法论深度解析",
+        "B站爆款视频方法论",
+        "短视频爆款公式与内容方法论",
+        "美食类短视频爆款分析",
+        "平台官方数据优先的内容复盘SOP"
+      ]
+    },
+    {
+      "case": 7,
+      "query": "AIDA框架怎么用在短视频里",
+      "category": "industry_methodology",
+      "answerable": true,
+      "hit": true,
+      "expected_sources": [
+        "短视频爆款公式与内容方法论"
+      ],
+      "retrieved_sources": [
+        "短视频爆款公式与内容方法论",
+        "B站UP主竞品分析框架",
+        "短视频选题方法论与框架",
+        "2024短视频直播与电商生态报告",
+        "2024抖音爆款短视频拆解报告"
+      ]
+    },
+    {
+      "case": 8,
+      "query": "短视频的爆款公式是什么",
+      "category": "industry_methodology",
+      "answerable": true,
+      "hit": true,
+      "expected_sources": [
+        "短视频爆款公式与内容方法论",
+        "口播视频爆款公式"
+      ],
+      "retrieved_sources": [
+        "短视频爆款公式与内容方法论",
+        "口播视频爆款公式",
+        "短视频爆款选题公式",
+        "公开行业报告的证据边界说明",
+        "抖音官方创作者服务入口说明"
+      ]
+    },
+    {
+      "case": 9,
+      "query": "短视频脚本怎么写",
+      "category": "industry_methodology",
+      "answerable": true,
+      "hit": true,
+      "expected_sources": [
+        "短视频脚本结构模板"
+      ],
+      "retrieved_sources": [
+        "短视频脚本结构模板",
+        "抖音爆款方法论深度解析",
+        "短视频行业数据报告模板",
+        "口播视频爆款公式",
+        "短视频数据对标分析模板"
+      ]
+    },
+    {
+      "case": 10,
+      "query": "怎么设计短视频的封面",
+      "category": "industry_methodology",
+      "answerable": true,
+      "hit": true,
+      "expected_sources": [
+        "短视频封面设计技巧"
+      ],
+      "retrieved_sources": [
+        "短视频封面设计技巧",
+        "平台官方数据优先的内容复盘SOP",
+        "短视频竞品分析七步法",
+        "2024抖音爆款短视频拆解报告",
+        "抖音爆款方法论深度解析"
+      ]
+    },
+    {
+      "case": 11,
+      "query": "短视频选题有什么方法",
+      "category": "industry_methodology",
+      "answerable": true,
+      "hit": true,
+      "expected_sources": [
+        "短视频选题方法论与框架",
+        "短视频爆款选题10个方法",
+        "短视频爆款选题公式"
+      ],
+      "retrieved_sources": [
+        "短视频选题方法论与框架",
+        "B站爆款视频方法论",
+        "短视频爆款选题10个方法",
+        "短视频爆款公式与内容方法论",
+        "抖音爆款方法论深度解析"
+      ]
+    },
+    {
+      "case": 12,
+      "query": "2024年美妆行业趋势",
+      "category": "trend_data",
+      "answerable": true,
+      "hit": true,
+      "expected_sources": [
+        "2024年短视频行业关键数据",
+        "美妆短视频内容特征研究"
+      ],
+      "retrieved_sources": [
+        "2024年短视频行业关键数据",
+        "B站2025-2026趋势数据报告",
+        "2025抖音流量密码与算法趋势",
+        "B站公开财报趋势证据使用指南",
+        "快手公开财报趋势证据使用指南"
+      ]
+    },
+    {
+      "case": 13,
+      "query": "最近短视频平台的热点话题",
+      "category": "trend_data",
+      "answerable": true,
+      "hit": true,
+      "expected_sources": [
+        "2025年短视频平台趋势分析",
+        "2025抖音流量密码与算法趋势"
+      ],
+      "retrieved_sources": [
+        "快手官方创作者服务入口说明",
+        "快手算法与运营规则",
+        "2025年短视频平台趋势分析",
+        "平台官方数据优先的内容复盘SOP",
+        "跨平台竞品分析同口径规范"
+      ]
+    },
+    {
+      "case": 14,
+      "query": "2025年短视频行业发展方向",
+      "category": "trend_data",
+      "answerable": true,
+      "hit": true,
+      "expected_sources": [
+        "2025年短视频平台趋势分析",
+        "B站2025-2026趋势数据报告"
+      ],
+      "retrieved_sources": [
+        "2025年短视频平台趋势分析",
+        "2025抖音流量密码与算法趋势",
+        "B站2025-2026趋势数据报告",
+        "B站公开财报趋势证据使用指南",
+        "快手公开财报趋势证据使用指南"
+      ]
+    },
+    {
+      "case": 15,
+      "query": "3C电子行业的短视频趋势",
+      "category": "trend_data",
+      "answerable": true,
+      "hit": true,
+      "expected_sources": [
+        "3C数码类短视频内容策略"
+      ],
+      "retrieved_sources": [
+        "3C数码类短视频内容策略",
+        "2025抖音流量密码与算法趋势",
+        "B站2025-2026趋势数据报告",
+        "B站公开财报趋势证据使用指南",
+        "快手公开财报趋势证据使用指南"
+      ]
+    },
+    {
+      "case": 16,
+      "query": "美食行业的短视频数据表现",
+      "category": "trend_data",
+      "answerable": true,
+      "hit": true,
+      "expected_sources": [
+        "美食类短视频爆款分析"
+      ],
+      "retrieved_sources": [
+        "美食类短视频爆款分析",
+        "短视频核心数据指标解析",
+        "短视频数据分析与优化方法",
+        "B站2025-2026趋势数据报告",
+        "2024年短视频行业关键数据"
+      ]
+    },
+    {
+      "case": 17,
+      "query": "有没有美妆垂直领域的分析报告",
+      "category": "historical_reports",
+      "answerable": true,
+      "hit": true,
+      "expected_sources": [
+        "美妆短视频内容特征研究"
+      ],
+      "retrieved_sources": [
+        "美妆短视频内容特征研究",
+        "B站2025-2026趋势数据报告",
+        "2024短视频直播与电商生态报告",
+        "公开行业报告的证据边界说明",
+        "2024抖音爆款短视频拆解报告"
+      ]
+    },
+    {
+      "case": 18,
+      "query": "历史爆款分析报告里有什么规律",
+      "category": "historical_reports",
+      "answerable": true,
+      "hit": true,
+      "expected_sources": [
+        "2024抖音爆款短视频拆解报告",
+        "美妆短视频内容特征研究",
+        "美食类短视频爆款分析"
+      ],
+      "retrieved_sources": [
+        "短视频行业数据报告模板",
+        "美妆短视频内容特征研究",
+        "2024抖音爆款短视频拆解报告",
+        "B站UP主竞品分析框架",
+        "B站2025-2026趋势数据报告"
+      ]
+    },
+    {
+      "case": 19,
+      "query": "有没有直播带货的分析报告",
+      "category": "historical_reports",
+      "answerable": true,
+      "hit": true,
+      "expected_sources": [
+        "2024短视频直播与电商生态报告"
+      ],
+      "retrieved_sources": [
+        "2024短视频直播与电商生态报告",
+        "短视频行业数据报告模板",
+        "2024年短视频行业关键数据",
+        "2025年短视频平台趋势分析",
+        "B站2025-2026趋势数据报告"
+      ]
+    },
+    {
+      "case": 20,
+      "query": "过去一年的爆款视频有什么共同特征",
+      "category": "historical_reports",
+      "answerable": true,
+      "hit": true,
+      "expected_sources": [
+        "美妆短视频内容特征研究",
+        "美食类短视频爆款分析",
+        "2024抖音爆款短视频拆解报告"
+      ],
+      "retrieved_sources": [
+        "短视频行业数据报告模板",
+        "短视频爆款选题10个方法",
+        "美妆短视频内容特征研究",
+        "2024抖音爆款短视频拆解报告",
+        "平台官方数据优先的内容复盘SOP"
+      ]
+    },
+    {
+      "case": 21,
+      "query": "有没有食品行业的短视频分析",
+      "category": "historical_reports",
+      "answerable": true,
+      "hit": true,
+      "expected_sources": [
+        "美食类短视频爆款分析"
+      ],
+      "retrieved_sources": [
+        "美食类短视频爆款分析",
+        "短视频爆款选题公式",
+        "B站推荐算法与UP主运营规则",
+        "短视频选题方法论与框架",
+        "跨平台竞品分析同口径规范"
+      ]
+    },
+    {
+      "case": 22,
+      "query": "竞品是怎么做短视频的",
+      "category": "competitor_analysis",
+      "answerable": true,
+      "hit": true,
+      "expected_sources": [
+        "短视频竞品分析七步法",
+        "短视频数据对标分析模板"
+      ],
+      "retrieved_sources": [
+        "B站UP主竞品分析框架",
+        "跨平台竞品分析同口径规范",
+        "短视频数据对标分析模板",
+        "短视频竞品分析七步法",
+        "短视频选题方法论与框架"
+      ]
+    },
+    {
+      "case": 23,
+      "query": "同类账号的爆款视频有什么特征",
+      "category": "competitor_analysis",
+      "answerable": true,
+      "hit": true,
+      "expected_sources": [
+        "短视频竞品分析七步法",
+        "短视频账号数据分析四维度",
+        "B站UP主竞品分析框架"
+      ],
+      "retrieved_sources": [
+        "B站UP主竞品分析框架",
+        "美妆短视频内容特征研究",
+        "跨平台竞品分析同口径规范",
+        "短视频爆款选题10个方法",
+        "B站爆款视频方法论"
+      ]
+    },
+    {
+      "case": 24,
+      "query": "怎么分析竞品账号的内容策略",
+      "category": "competitor_analysis",
+      "answerable": true,
+      "hit": true,
+      "expected_sources": [
+        "短视频竞品分析七步法",
+        "B站UP主竞品分析框架"
+      ],
+      "retrieved_sources": [
+        "3C数码类短视频内容策略",
+        "B站UP主竞品分析框架",
+        "跨平台竞品分析同口径规范",
+        "短视频行业数据报告模板",
+        "短视频数据对标分析模板"
+      ]
+    },
+    {
+      "case": 25,
+      "query": "竞品分析有哪些维度",
+      "category": "competitor_analysis",
+      "answerable": true,
+      "hit": true,
+      "expected_sources": [
+        "短视频竞品分析七步法",
+        "短视频账号数据分析四维度"
+      ],
+      "retrieved_sources": [
+        "短视频数据对标分析模板",
+        "跨平台竞品分析同口径规范",
+        "B站UP主竞品分析框架",
+        "短视频竞品分析七步法",
+        "短视频数据分析与优化方法"
+      ]
+    },
+    {
+      "case": 26,
+      "query": "如何提高短视频的完播率",
+      "category": "cross",
+      "answerable": true,
+      "hit": true,
+      "expected_sources": [
+        "短视频数据分析与优化方法",
+        "短视频核心数据指标解析"
+      ],
+      "retrieved_sources": [
+        "短视频核心数据指标解析",
+        "短视频爆款公式与内容方法论",
+        "2025抖音流量密码与算法趋势",
+        "短视频封面设计技巧",
+        "短视频行业数据报告模板"
+      ]
+    },
+    {
+      "case": 27,
+      "query": "短视频选题有什么技巧",
+      "category": "cross",
+      "answerable": true,
+      "hit": true,
+      "expected_sources": [
+        "短视频选题方法论与框架",
+        "短视频爆款选题10个方法",
+        "短视频爆款选题公式"
+      ],
+      "retrieved_sources": [
+        "短视频爆款选题10个方法",
+        "短视频爆款选题公式",
+        "短视频选题方法论与框架",
+        "抖音违规限流避坑指南",
+        "短视频封面设计技巧"
+      ]
+    },
+    {
+      "case": 28,
+      "query": "怎么写短视频标题吸引人",
+      "category": "cross",
+      "answerable": true,
+      "hit": true,
+      "expected_sources": [
+        "短视频爆款选题公式",
+        "短视频爆款公式与内容方法论",
+        "美食类短视频爆款分析"
+      ],
+      "retrieved_sources": [
+        "短视频爆款选题公式",
+        "抖音违规限流避坑指南",
+        "B站UP主竞品分析框架",
+        "平台官方数据优先的内容复盘SOP",
+        "2025抖音流量密码与算法趋势"
+      ]
+    }
+  ]
+}

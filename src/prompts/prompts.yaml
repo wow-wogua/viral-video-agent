@@ -39,6 +39,39 @@ versions:
       - 步骤之间有清晰的依赖关系
       - 总步骤不超过 7 个
 
+    planner_v2: |
+      你是证据采集规划器。只规划“为了回答用户问题，需要先获取哪些外部数据或知识库证据”。
+
+      用户需求: {user_request}
+      用户指定平台: {platforms}
+
+      约束:
+      - 不要规划分析、总结、写报告或制作图表，这些由后续固定节点完成
+      - 最多 3 个任务，每个任务必须能由一个工具调用完成
+      - 当前真实视频搜索只支持 bilibili；不要假设抖音/快手搜索已经接入
+      - 用户若需要当前视频样本，规划 search 类型任务
+      - 用户若需要规则、方法论或历史案例，规划 knowledge 类型任务
+
+      只输出合法 JSON：
+      {{"tasks": [{{"description": "...", "evidence_type": "search|knowledge|transcript|trend"}}]}}
+
+    researcher_dynamic: |
+      你是证据采集执行器。根据当前任务选择一个当前可用工具并生成参数。
+
+      当前任务: {task}
+      用户目标平台: {platforms}
+
+      当前可用工具:
+      {available_tools}
+
+      约束:
+      - 只能选择上面列出的工具或 none
+      - 不得输出未支持的平台
+      - 不得臆造视频 ID 或链接
+      - 只输出一个合法 JSON 对象
+
+      输出格式：{{"tool": "工具名", "params": {{"参数名": "值"}}}}
+
     # ── Researcher 工具选择 ──
     researcher: |
       你是研究员。根据任务选择工具和参数。

@@ -1,24 +1,23 @@
 # 爆款视频分析多智能体系统
 
-基于 LangGraph 的 5-Agent 串行回环系统，自动分析短视频平台爆款视频，提炼爆款规律并生成策略报告。
+基于 LangGraph 的短视频分析 Agent 系统，自动收集可用证据、分析爆款内容并生成策略报告。当前默认使用 v2 确定性主流程，保留 v1 Supervisor 回环用于 A/B 和回退。
 
 ## 架构
 
-```
-用户输入 → Supervisor → Planner → Researcher → Analyst → Writer → 报告
-              ↑            ↓          ↓            ↓         ↓
-              └────────────┴──────────┴────────────┴─────────┘
-                    所有节点回到 Supervisor（集中路由）
+```text
+v2（默认）: 用户输入 → 确定性入口 → Planner → Research Loop → Evidence Gate → Analyst → Writer
+v1（回退）: 用户输入 → Supervisor → Planner/Researcher/Analyst/Writer → Supervisor → 报告
 ```
 
 **核心设计：**
-- Supervisor 集中路由 + 意图分类（非分析请求直接回答）+ 三层兜底解析（JSON→正则→状态推断）
-- Researcher LLM 驱动选择 `search_videos` / `rag_search` / `get_transcript` / `get_trend_data` / `none`，通过 MCP 调用并保留直接函数兜底
-- `raw_data` 与搜索关键词使用 reducer 跨多步累积；Planner → Researcher → Analyst → Writer 存在数据依赖，当前不是扇出并行架构
-- Analyst 自评循环（默认置信度阈值 0.8，可用环境变量调整）+ Writer 修订循环；达到最大迭代时保留真实置信度
+- v2 用规则完成意图与平台能力预检，正常流转不再让 Supervisor 每步调用 LLM；v1 仍可通过 `GRAPH_VERSION=v1` 启用
+- 动态能力注册只暴露当前真实可用的工具/平台；抖音、快手、小红书实时搜索未接入时直接返回 `unsupported_platform`
+- Researcher 在可用工具与 `none` 间选择，通过 MCP 调用并保留直接函数兜底；Pydantic 统一参数校验，搜索结果去重且单次最多 20 条
+- 结构化工具结果记录 `success/empty/unavailable/error`，Evidence Gate 在无真实证据时返回 `partial`，不继续生成正常报告
+- v2 Analyst 最多 2 轮、Writer 生成 1 次；v1 保留原自评与修订回环用于对照
 - 请求携带稳定 `user_id`，长期记忆与 Redis 历史列表按用户隔离；Redis 只保存缓存、历史记录和 running/completed/partial/failed 状态，当前未接入 Celery
 - CostTracker / TraceTracker / FallbackCounter 使用请求上下文隔离，避免并发请求串统计
-- RAG 使用向量候选 + 中文词项扩展的轻量混合排序，按来源去重，并支持 B站/抖音/快手平台过滤
+- RAG 使用标题感知切分、稳定 chunk ID、文档/片段去重、向量候选 + 中文词项混合排序；返回章节、来源 URL 和来源等级
 - `get_trend_data` 默认在真实数据源未配置时返回 `unavailable`；随机 mock 只在 `ENABLE_MOCK_TOOLS=true` 的显式演示模式启用
 
 ## 演示
@@ -103,11 +102,12 @@ docker compose up -d
 |------|------|
 | 多 Agent vs 单 Agent | 3 条不同任务各单次运行，综合均值 +0.53；其中 simple +1.2、medium -0.2，不能概括成“复杂任务普遍提升” |
 | LLM-as-Judge 评测框架 | 5 维度打分；当前支持温度 0、默认重复 3 次取均值，旧对比结果仍是单次历史试验 |
-| BFCL 风格工具选择 | 2026-07-11 当前35条：工具名30/35（85.7%）、已标注参数14/31（45.2%）、完全14/35（40.0%）；主要问题是 `none` 过度调用与参数文案不稳定 |
+| BFCL 风格工具选择 | 2026-07-11 旧全工具集35条：工具名30/35、已标注参数14/31、完全14/35；暴露 `none` 过度调用与参数文案不稳定，未通过改旧题 Prompt 追分 |
+| v2 能力范围路由 | 冻结 dev 21/23（91.3%）；独立 holdout 13/13。只评当前可用能力，不等同官方 BFCL 或开放域泛化 |
 | 微调模型工具准确率 | 内置50条历史为88%→94%；同 Prompt hard44/holdout20 公平实验中 SFT+DPO v3 与基座对应指标相同，未证明泛化提升 |
 | tau-bench-inspired 冒烟检查 | 2026-07-11 当前严格18条为13/18（72.2%）：simple 3/3、medium 3/3、complex 5/5、edge 2/7；5条边界失败均为安全短路后缺少 `plan`，通过用例平均161.8秒。历史18/18只作旧规则记录 |
-| RAG 来源 Recall@5 | 2026-07-11 当前固定集：27/27可回答用例命中，另有1/28知识库覆盖缺口（小红书）；这是自建固定集，不代表开放域泛化 |
-| 单次分析耗时 | 当前真实同步 API 样例152.2秒；受 API、网络、Agent迭代次数和用例影响 |
+| RAG 来源 Recall@5 | 40 篇、235 个标题感知 chunk；2026-07-12 固定集28/28命中，来源审计通过。这是自建固定集，不代表开放域泛化 |
+| v1/v2 架构 A/B | B站科技：164.8s→79.4s、LLM 16→7；B站美食+RAG：179.6s→119.4s、LLM 14→6。两组均 completed，报告长度同量级；仍需扩大任务集评估质量 |
 | Redis 用户隔离 | 已验证 owner 可见、其他 `user_id` 返回 not_found，用户历史列表互不混合；这是客户端稳定ID隔离，不等同于登录鉴权 |
 | FallbackCounter | 历史 JSON 82%、正则 18%，当前请求隔离实现更新后待重跑 |
 
@@ -128,7 +128,7 @@ viral-video-agent/
 │   ├── mcp/             # MCP Client
 │   └── api/             # FastAPI 路由
 ├── frontend/            # Next.js 前端
-├── knowledge/           # RAG 知识库（30 篇，5 分类）
+├── knowledge/           # RAG 知识库（40 篇，5 分类，带来源与时间元数据）
 ├── docker-compose.yml   # 6 服务编排
 ├── Dockerfile           # 后端镜像
 └── nginx.conf           # Nginx 反向代理

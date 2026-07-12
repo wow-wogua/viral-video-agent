@@ -1,3 +1,4 @@
+import json
 import re
 from pathlib import PurePath
 
@@ -21,6 +22,7 @@ _QUERY_EXPANSIONS = {
     "违规": ("违规", "审核", "限流"),
     "审核": ("审核", "违规", "限流"),
     "流量分配": ("流量池", "推荐", "分发"),
+    "流量分发": ("流量", "推荐", "分发"),
     "推荐算法": ("推荐", "算法"),
     "直播带货": ("直播", "带货", "电商"),
     "3c": ("3c", "数码", "电子"),
@@ -38,6 +40,14 @@ _STOP_FRAGMENTS = (
     "一下", "一个", "里的", "有什么", "如何", "行业", "过去一年", "各平台",
     "是", "的", "里", "用在", "给我", "想要",
 )
+
+_SOURCE_TIER_BONUS = {
+    "official": 0.15,
+    "research": 0.10,
+    "industry": 0.05,
+    "secondary": 0.0,
+    "internal": -0.10,
+}
 
 
 def _query_terms(query: str) -> list[str]:
@@ -63,6 +73,19 @@ def _lexical_score(query: str, document: str, source: str) -> float:
     content_hits = sum(1 for term in terms if term in haystack)
     filename_hits = sum(1 for term in terms if term in filename)
     return (content_hits + 0.5 * filename_hits) / len(terms)
+
+
+def _source_urls(metadata: dict) -> list[str]:
+    raw = metadata.get("source_urls_json", "")
+    if raw:
+        try:
+            value = json.loads(raw)
+            if isinstance(value, list):
+                return [str(url) for url in value if url]
+        except (json.JSONDecodeError, TypeError):
+            pass
+    primary = metadata.get("source_url", "")
+    return [primary] if primary else []
 
 
 def retrieve_with_metadata(query: str, top_k: int = 5, platform: str = None) -> list[dict]:
@@ -98,6 +121,13 @@ def retrieve_with_metadata(query: str, top_k: int = 5, platform: str = None) -> 
                 "content": document,
                 "source": source,
                 "platform": metadata.get("platform", "generic"),
+                "title": metadata.get("title", ""),
+                "category": metadata.get("category", ""),
+                "heading_path": metadata.get("heading_path", ""),
+                "source_url": metadata.get("source_url", ""),
+                "source_urls": _source_urls(metadata),
+                "source_tier": metadata.get("source_tier", "internal"),
+                "provenance_status": metadata.get("provenance_status", "missing"),
                 "semantic_rank": rank,
                 "distance": distance,
                 "lexical_score": 0.0,
@@ -112,6 +142,13 @@ def retrieve_with_metadata(query: str, top_k: int = 5, platform: str = None) -> 
                 "content": document,
                 "source": source,
                 "platform": metadata.get("platform", "generic"),
+                "title": metadata.get("title", ""),
+                "category": metadata.get("category", ""),
+                "heading_path": metadata.get("heading_path", ""),
+                "source_url": metadata.get("source_url", ""),
+                "source_urls": _source_urls(metadata),
+                "source_tier": metadata.get("source_tier", "internal"),
+                "provenance_status": metadata.get("provenance_status", "missing"),
                 "semantic_rank": candidate_count + 1,
                 "distance": None,
                 "lexical_score": score,
@@ -123,7 +160,14 @@ def retrieve_with_metadata(query: str, top_k: int = 5, platform: str = None) -> 
 
     for item in by_source.values():
         semantic_score = 1 / item["semantic_rank"]
-        item["score"] = item["lexical_score"] + 0.25 * semantic_score
+        source_bonus = _SOURCE_TIER_BONUS.get(item.get("source_tier", "internal"), 0.0)
+        platform_bonus = 0.15 if platform and item.get("platform") == platform else 0.0
+        item["score"] = (
+            item["lexical_score"]
+            + 0.25 * semantic_score
+            + source_bonus
+            + platform_bonus
+        )
 
     return sorted(by_source.values(), key=lambda item: item["score"], reverse=True)[:top_k]
 

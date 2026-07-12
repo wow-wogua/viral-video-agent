@@ -3,7 +3,7 @@ import re
 from langchain_core.messages import HumanMessage
 from src.agents.supervisor import get_llm, extract_text
 from src.graph.state import AgentState
-from src.config import ANALYSIS_CONFIDENCE_THRESHOLD, ANALYST_MAX_ITERATIONS
+from src.config import ANALYST_MAX_ITERATIONS, V2_ANALYST_MAX_ITERATIONS
 from src.utils.fallback_counter import fallback_counter
 from src.utils.trace_tracker import trace_tracker
 from src.prompts.manager import prompt_manager
@@ -15,8 +15,13 @@ async def analyst_node(state: AgentState) -> dict:
     raw_data = state.get("raw_data", [])
     prev_analysis = state.get("analysis", {})
     iterations = state.get("analysis_iterations", 0)
+    max_iterations = (
+        V2_ANALYST_MAX_ITERATIONS
+        if state.get("workflow_version") == "v2"
+        else ANALYST_MAX_ITERATIONS
+    )
 
-    if iterations >= ANALYST_MAX_ITERATIONS:
+    if iterations >= max_iterations:
         confidence = state.get("analysis_confidence", 0.0)
         trace_tracker.end_agent("analyst")
         return {"analysis_confidence": confidence}

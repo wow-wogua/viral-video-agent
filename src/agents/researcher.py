@@ -24,6 +24,9 @@ def _unwrap_mcp_result(result):
     for attr in ("structured_content", "structuredContent"):
         value = getattr(result, attr, None)
         if value is not None:
+            # FastMCP 会把函数返回值包装为 {"result": ...}。
+            if isinstance(value, dict) and set(value) == {"result"}:
+                return value["result"]
             return value
 
     content = getattr(result, "content", None)

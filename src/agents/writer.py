@@ -1,7 +1,7 @@
 from langchain_core.messages import HumanMessage
 from src.agents.supervisor import get_llm, extract_text
 from src.graph.state import AgentState
-from src.config import WRITER_MAX_REVISIONS
+from src.config import WRITER_MAX_REVISIONS, V2_WRITER_MAX_REVISIONS
 from src.memory.long_term import save_memory
 from src.prompts.manager import prompt_manager
 from src.utils.trace_tracker import trace_tracker
@@ -23,8 +23,13 @@ async def writer_node(state: AgentState) -> dict:
     raw_data = state.get("raw_data", [])
     draft = state.get("report_draft", "")
     revisions = state.get("report_revision_count", 0)
+    max_revisions = (
+        V2_WRITER_MAX_REVISIONS
+        if state.get("workflow_version") == "v2"
+        else WRITER_MAX_REVISIONS
+    )
 
-    if draft and revisions >= WRITER_MAX_REVISIONS:
+    if draft and revisions >= max_revisions:
         # 存储分析记忆
         try:
             user_request = state.get("user_request", "")

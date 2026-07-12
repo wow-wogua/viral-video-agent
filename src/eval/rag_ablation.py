@@ -68,7 +68,7 @@ RAG_TEST_CASES = [
     # platform_rules (5 条)
     {"query": "抖音的推荐算法是什么原理", "expected_sources": ["抖音算法推荐机制详解"], "category": "platform_rules"},
     {"query": "B站的流量分配机制", "expected_sources": ["B站流量池与推荐算法详解", "B站推荐算法与UP主运营规则"], "category": "platform_rules"},
-    {"query": "小红书的内容审核规则", "expected_sources": [], "answerable": False, "category": "platform_rules"},
+    {"query": "小红书的内容审核规则", "expected_sources": ["小红书官方创作者服务入口说明"], "category": "platform_rules"},
     {"query": "快手的算法推荐逻辑", "expected_sources": ["快手算法与运营规则"], "category": "platform_rules"},
     {"query": "各平台的违规内容标准是什么", "expected_sources": ["抖音违规限流避坑指南", "快手算法与运营规则"], "category": "platform_rules"},
 

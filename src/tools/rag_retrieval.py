@@ -1,4 +1,4 @@
-from src.rag.retriever import retrieve
+from src.rag.retriever import retrieve_with_metadata
 
 
 def _detect_platform_from_query(query: str) -> str | None:
@@ -13,11 +13,25 @@ def _detect_platform_from_query(query: str) -> str | None:
     return None
 
 
-async def rag_search(query: str, top_k: int = 5) -> list[str]:
-    """从 RAG 知识库检索相关文档，自动过滤平台。"""
+async def rag_search(query: str, top_k: int = 5, platform: str | None = None) -> list[dict]:
+    """检索知识库并返回可追溯的正文、文档、章节与来源 URL。"""
     try:
-        platform = _detect_platform_from_query(query)
-        return retrieve(query, top_k, platform=platform)
+        platform = platform or _detect_platform_from_query(query)
+        results = retrieve_with_metadata(query, top_k, platform=platform)
+        return [
+            {
+                "content": item["content"],
+                "title": item.get("title", ""),
+                "source": item.get("source", ""),
+                "source_url": item.get("source_url", ""),
+                "source_urls": item.get("source_urls", []),
+                "category": item.get("category", ""),
+                "platform": item.get("platform", "generic"),
+                "heading_path": item.get("heading_path", ""),
+                "source_tier": item.get("source_tier", "internal"),
+            }
+            for item in results
+        ]
     except Exception as e:
         print(f"[rag] 检索失败: {e}")
         return []

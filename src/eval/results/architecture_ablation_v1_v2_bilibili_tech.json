@@ -1,0 +1,130 @@
+{
+  "timestamp": "2026-07-12T10:35:51.889053",
+  "versions": [
+    "v1",
+    "v2"
+  ],
+  "cases": [
+    "bilibili_tech"
+  ],
+  "results": [
+    {
+      "version": "v1",
+      "case_id": "bilibili_tech",
+      "status": "completed",
+      "expected_status": "completed",
+      "passed": true,
+      "termination_reason": "completed",
+      "elapsed_s": 164.8,
+      "llm_calls": 16,
+      "supervisor_rounds": 13,
+      "plan_steps": 7,
+      "research_tasks": 0,
+      "tool_statuses": [],
+      "evidence_items": 0,
+      "evidence_sources": [],
+      "raw_data_count": 30,
+      "analysis_iterations": 5,
+      "writer_revisions": 3,
+      "report_length": 929,
+      "trace": {
+        "total_duration_s": 33.69,
+        "total_llm_calls": 16,
+        "agents": [
+          {
+            "agent": "supervisor",
+            "duration_s": 0.0,
+            "llm_calls": 5,
+            "pct_of_total": 0.0
+          },
+          {
+            "agent": "planner",
+            "duration_s": 7.37,
+            "llm_calls": 1,
+            "pct_of_total": 21.9
+          },
+          {
+            "agent": "researcher",
+            "duration_s": 5.19,
+            "llm_calls": 2,
+            "pct_of_total": 15.4
+          },
+          {
+            "agent": "analyst",
+            "duration_s": 18.22,
+            "llm_calls": 5,
+            "pct_of_total": 54.1
+          },
+          {
+            "agent": "writer",
+            "duration_s": 2.91,
+            "llm_calls": 3,
+            "pct_of_total": 8.6
+          }
+        ]
+      }
+    },
+    {
+      "version": "v2",
+      "case_id": "bilibili_tech",
+      "status": "completed",
+      "expected_status": "completed",
+      "passed": true,
+      "termination_reason": "completed",
+      "elapsed_s": 79.4,
+      "llm_calls": 7,
+      "supervisor_rounds": 0,
+      "plan_steps": 3,
+      "research_tasks": 3,
+      "tool_statuses": [
+        "success",
+        "empty",
+        "duplicate_only"
+      ],
+      "evidence_items": 20,
+      "evidence_sources": [
+        "bilibili"
+      ],
+      "raw_data_count": 20,
+      "analysis_iterations": 2,
+      "writer_revisions": 1,
+      "report_length": 1558,
+      "trace": {
+        "total_duration_s": 30.31,
+        "total_llm_calls": 7,
+        "agents": [
+          {
+            "agent": "entry",
+            "duration_s": 0.0,
+            "llm_calls": 0,
+            "pct_of_total": 0.0
+          },
+          {
+            "agent": "planner_v2",
+            "duration_s": 3.68,
+            "llm_calls": 1,
+            "pct_of_total": 12.1
+          },
+          {
+            "agent": "researcher_v2",
+            "duration_s": 5.29,
+            "llm_calls": 3,
+            "pct_of_total": 17.5
+          },
+          {
+            "agent": "analyst",
+            "duration_s": 18.55,
+            "llm_calls": 2,
+            "pct_of_total": 61.2
+          },
+          {
+            "agent": "writer",
+            "duration_s": 2.79,
+            "llm_calls": 1,
+            "pct_of_total": 9.2
+          }
+        ]
+      }
+    }
+  ]
+}

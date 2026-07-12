@@ -17,11 +17,15 @@ XFYUN_SECRET_KEY: str = os.getenv("XFYUN_SECRET_KEY", "")
 ANALYSIS_CONFIDENCE_THRESHOLD: float = float(os.getenv("ANALYSIS_CONFIDENCE_THRESHOLD", "0.8"))
 ANALYST_MAX_ITERATIONS: int = int(os.getenv("ANALYST_MAX_ITERATIONS", "5"))
 WRITER_MAX_REVISIONS: int = int(os.getenv("WRITER_MAX_REVISIONS", "3"))
+GRAPH_VERSION: str = os.getenv("GRAPH_VERSION", "v2").lower()
+V2_ANALYST_MAX_ITERATIONS: int = int(os.getenv("V2_ANALYST_MAX_ITERATIONS", "2"))
+V2_WRITER_MAX_REVISIONS: int = int(os.getenv("V2_WRITER_MAX_REVISIONS", "1"))
+V2_MIN_EVIDENCE_ITEMS: int = int(os.getenv("V2_MIN_EVIDENCE_ITEMS", "1"))
 
-CHROMA_HOST: str = os.getenv("CHROMA_HOST", "localhost")
+CHROMA_HOST: str = os.getenv("CHROMA_HOST", "127.0.0.1")
 CHROMA_PORT: int = int(os.getenv("CHROMA_PORT", "8500"))
 EMBEDDING_MODEL: str = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
 
 REDIS_URL: str = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-MCP_SERVER_URL: str = os.getenv("MCP_SERVER_URL", "http://localhost:8001/sse")
+MCP_SERVER_URL: str = os.getenv("MCP_SERVER_URL", "http://127.0.0.1:8001/sse")
 ENABLE_MOCK_TOOLS: bool = os.getenv("ENABLE_MOCK_TOOLS", "false").lower() == "true"

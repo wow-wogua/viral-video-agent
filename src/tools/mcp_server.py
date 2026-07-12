@@ -28,9 +28,9 @@ async def get_transcript_tool(video_url: str) -> str | None:
 
 
 @mcp.tool(name="rag_search")
-async def rag_search_tool(query: str, top_k: int = 5) -> list[str]:
+async def rag_search_tool(query: str, top_k: int = 5, platform: str | None = None) -> list[dict]:
     """从项目知识库检索参考文档。"""
-    return await rag_search(query, top_k)
+    return await rag_search(query, top_k, platform=platform)
 
 
 @mcp.tool(name="get_trend_data")

@@ -1,0 +1,43 @@
+{
+  "timestamp": "2026-07-12T10:38:24.359838",
+  "versions": [
+    "v2"
+  ],
+  "cases": [
+    "unsupported_douyin_search"
+  ],
+  "results": [
+    {
+      "version": "v2",
+      "case_id": "unsupported_douyin_search",
+      "status": "partial",
+      "expected_status": "partial",
+      "passed": true,
+      "termination_reason": "unsupported_platform",
+      "elapsed_s": 0.0,
+      "llm_calls": 0,
+      "supervisor_rounds": 0,
+      "plan_steps": 0,
+      "research_tasks": 0,
+      "tool_statuses": [],
+      "evidence_items": 0,
+      "evidence_sources": [],
+      "raw_data_count": 0,
+      "analysis_iterations": 0,
+      "writer_revisions": 0,
+      "report_length": 67,
+      "trace": {
+        "total_duration_s": 0.0,
+        "total_llm_calls": 0,
+        "agents": [
+          {
+            "agent": "entry",
+            "duration_s": 0.0,
+            "llm_calls": 0,
+            "pct_of_total": 0
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,361 @@
+{
+  "timestamp": "2026-07-12T10:43:57.675732",
+  "scope": "runtime-enabled capabilities only",
+  "total": 23,
+  "tool_correct": 21,
+  "params_correct": 21,
+  "full_correct": 21,
+  "tool_accuracy": 91.30434782608695,
+  "params_accuracy": 91.30434782608695,
+  "full_accuracy": 91.30434782608695,
+  "details": [
+    {
+      "case": 1,
+      "input": "搜索B站美妆类热门视频",
+      "kind": "tool_routing",
+      "expected_tool": "search_videos",
+      "actual_tool": "search_videos",
+      "actual_params": {
+        "keyword": "美妆",
+        "platforms": [
+          "bilibili"
+        ],
+        "limit": 20
+      },
+      "tool_correct": true,
+      "params_correct": true,
+      "fully_correct": true,
+      "latency_ms": 2330.0
+    },
+    {
+      "case": 2,
+      "input": "找B站最近的科技区爆款",
+      "kind": "tool_routing",
+      "expected_tool": "search_videos",
+      "actual_tool": "search_videos",
+      "actual_params": {
+        "keyword": "科技",
+        "platforms": [
+          "bilibili"
+        ],
+        "limit": 20
+      },
+      "tool_correct": true,
+      "params_correct": true,
+      "fully_correct": true,
+      "latency_ms": 818.1
+    },
+    {
+      "case": 3,
+      "input": "获取B站热门排行榜前20名",
+      "kind": "tool_routing",
+      "expected_tool": "search_videos",
+      "actual_tool": "search_videos",
+      "actual_params": {
+        "keyword": "热门",
+        "platforms": [
+          "bilibili"
+        ],
+        "limit": 20
+      },
+      "tool_correct": true,
+      "params_correct": true,
+      "fully_correct": true,
+      "latency_ms": 994.3
+    },
+    {
+      "case": 4,
+      "input": "分析B站游戏区最近的热门视频样本",
+      "kind": "tool_routing",
+      "expected_tool": "search_videos",
+      "actual_tool": "search_videos",
+      "actual_params": {
+        "keyword": "游戏",
+        "platforms": [
+          "bilibili"
+        ],
+        "limit": 20
+      },
+      "tool_correct": true,
+      "params_correct": true,
+      "fully_correct": true,
+      "latency_ms": 1156.2
+    },
+    {
+      "case": 5,
+      "input": "帮我找B站音乐区近期热视频",
+      "kind": "tool_routing",
+      "expected_tool": "search_videos",
+      "actual_tool": "search_videos",
+      "actual_params": {
+        "keyword": "音乐",
+        "platforms": [
+          "bilibili"
+        ],
+        "limit": 20
+      },
+      "tool_correct": true,
+      "params_correct": true,
+      "fully_correct": true,
+      "latency_ms": 2926.6
+    },
+    {
+      "case": 6,
+      "input": "拉10条B站知识区热门视频",
+      "kind": "tool_routing",
+      "expected_tool": "search_videos",
+      "actual_tool": "search_videos",
+      "actual_params": {
+        "keyword": "知识区热门",
+        "platforms": [
+          "bilibili"
+        ],
+        "limit": 10
+      },
+      "tool_correct": true,
+      "params_correct": true,
+      "fully_correct": true,
+      "latency_ms": 1202.9
+    },
+    {
+      "case": 7,
+      "input": "找B站汽车区最近的测评视频",
+      "kind": "tool_routing",
+      "expected_tool": "search_videos",
+      "actual_tool": "search_videos",
+      "actual_params": {
+        "keyword": "汽车测评",
+        "platforms": [
+          "bilibili"
+        ],
+        "limit": 20
+      },
+      "tool_correct": true,
+      "params_correct": true,
+      "fully_correct": true,
+      "latency_ms": 855.9
+    },
+    {
+      "case": 8,
+      "input": "B站生活区最近有什么火的视频",
+      "kind": "tool_routing",
+      "expected_tool": "search_videos",
+      "actual_tool": "search_videos",
+      "actual_params": {
+        "keyword": "生活 热门",
+        "platforms": [
+          "bilibili"
+        ],
+        "limit": 20
+      },
+      "tool_correct": true,
+      "params_correct": true,
+      "fully_correct": true,
+      "latency_ms": 1088.0
+    },
+    {
+      "case": 9,
+      "input": "检索知识库中关于爆款公式的资料",
+      "kind": "tool_routing",
+      "expected_tool": "rag_search",
+      "actual_tool": "rag_search",
+      "actual_params": {
+        "query": "bilibili 爆款公式",
+        "top_k": 5
+      },
+      "tool_correct": true,
+      "params_correct": true,
+      "fully_correct": true,
+      "latency_ms": 880.9
+    },
+    {
+      "case": 10,
+      "input": "查一下B站推荐算法规则",
+      "kind": "tool_routing",
+      "expected_tool": "rag_search",
+      "actual_tool": "rag_search",
+      "actual_params": {
+        "query": "B站推荐算法规则 bilibili recommendation algorithm mechanism",
+        "top_k": 5
+      },
+      "tool_correct": true,
+      "params_correct": true,
+      "fully_correct": true,
+      "latency_ms": 1128.8
+    },
+    {
+      "case": 11,
+      "input": "知识库有没有AIDA框架",
+      "kind": "tool_routing",
+      "expected_tool": "rag_search",
+      "actual_tool": "rag_search",
+      "actual_params": {
+        "query": "AIDA框架",
+        "top_k": 5
+      },
+      "tool_correct": true,
+      "params_correct": true,
+      "fully_correct": true,
+      "latency_ms": 943.9
+    },
+    {
+      "case": 12,
+      "input": "找一份竞品分析方法论",
+      "kind": "tool_routing",
+      "expected_tool": "rag_search",
+      "actual_tool": "rag_search",
+      "actual_params": {
+        "query": "竞品分析方法论 B站 bilibili",
+        "top_k": 5
+      },
+      "tool_correct": true,
+      "params_correct": true,
+      "fully_correct": true,
+      "latency_ms": 845.9
+    },
+    {
+      "case": 13,
+      "input": "检索短视频开头钩子设计资料",
+      "kind": "tool_routing",
+      "expected_tool": "rag_search",
+      "actual_tool": "search_videos",
+      "actual_params": {
+        "keyword": "短视频开头钩子设计",
+        "platforms": [
+          "bilibili"
+        ],
+        "limit": 20
+      },
+      "tool_correct": false,
+      "params_correct": false,
+      "fully_correct": false,
+      "latency_ms": 1295.9
+    },
+    {
+      "case": 14,
+      "input": "查知识库里的完播率指标定义",
+      "kind": "tool_routing",
+      "expected_tool": "rag_search",
+      "actual_tool": "rag_search",
+      "actual_params": {
+        "query": "B站 完播率 指标定义 计算公式",
+        "top_k": 5
+      },
+      "tool_correct": true,
+      "params_correct": true,
+      "fully_correct": true,
+      "latency_ms": 1158.4
+    },
+    {
+      "case": 15,
+      "input": "有没有历史爆款分析报告可参考",
+      "kind": "tool_routing",
+      "expected_tool": "rag_search",
+      "actual_tool": "rag_search",
+      "actual_params": {
+        "query": "bilibili 历史爆款分析报告 案例",
+        "top_k": 5
+      },
+      "tool_correct": true,
+      "params_correct": true,
+      "fully_correct": true,
+      "latency_ms": 966.5
+    },
+    {
+      "case": 16,
+      "input": "查一下抖音算法规则资料，不需要实时视频",
+      "kind": "tool_routing",
+      "expected_tool": "rag_search",
+      "actual_tool": "rag_search",
+      "actual_params": {
+        "query": "抖音算法规则推荐机制流量分配审核标准",
+        "top_k": 10
+      },
+      "tool_correct": true,
+      "params_correct": true,
+      "fully_correct": true,
+      "latency_ms": 1119.2
+    },
+    {
+      "case": 17,
+      "input": "根据已有数据总结三个发现",
+      "kind": "tool_routing",
+      "expected_tool": null,
+      "actual_tool": "rag_search",
+      "actual_params": {
+        "query": "bilibili 平台规则、数据分析方法论、历史案例",
+        "top_k": 5
+      },
+      "tool_correct": false,
+      "params_correct": false,
+      "fully_correct": false,
+      "latency_ms": 3287.6
+    },
+    {
+      "case": 18,
+      "input": "不要调用工具，直接解释什么是完播率",
+      "kind": "tool_routing",
+      "expected_tool": null,
+      "actual_tool": null,
+      "actual_params": {},
+      "tool_correct": true,
+      "params_correct": true,
+      "fully_correct": true,
+      "latency_ms": 934.7
+    },
+    {
+      "case": 19,
+      "input": "把已有报告改得更简洁",
+      "kind": "tool_routing",
+      "expected_tool": null,
+      "actual_tool": null,
+      "actual_params": {},
+      "tool_correct": true,
+      "params_correct": true,
+      "fully_correct": true,
+      "latency_ms": 2545.8
+    },
+    {
+      "case": 20,
+      "input": "直接写三个标题，不用查资料",
+      "kind": "tool_routing",
+      "expected_tool": null,
+      "actual_tool": null,
+      "actual_params": {},
+      "tool_correct": true,
+      "params_correct": true,
+      "fully_correct": true,
+      "latency_ms": 809.4
+    },
+    {
+      "case": 21,
+      "input": "搜索抖音最近的热门视频样本",
+      "kind": "entry_boundary",
+      "expected": "unsupported_platform",
+      "actual": "unsupported_platform",
+      "tool_correct": true,
+      "params_correct": true,
+      "fully_correct": true
+    },
+    {
+      "case": 22,
+      "input": "找快手当前爆款排行榜",
+      "kind": "entry_boundary",
+      "expected": "unsupported_platform",
+      "actual": "unsupported_platform",
+      "tool_correct": true,
+      "params_correct": true,
+      "fully_correct": true
+    },
+    {
+      "case": 23,
+      "input": "拉一批小红书近期热门美妆视频",
+      "kind": "entry_boundary",
+      "expected": "unsupported_platform",
+      "actual": "unsupported_platform",
+      "tool_correct": true,
+      "params_correct": true,
+      "fully_correct": true
+    }
+  ]
+}

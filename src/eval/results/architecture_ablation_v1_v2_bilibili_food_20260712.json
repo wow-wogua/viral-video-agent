@@ -1,0 +1,136 @@
+{
+  "timestamp": "2026-07-12T16:56:52.935274",
+  "versions": [
+    "v1",
+    "v2"
+  ],
+  "cases": [
+    "bilibili_food_knowledge"
+  ],
+  "results": [
+    {
+      "version": "v1",
+      "case_id": "bilibili_food_knowledge",
+      "status": "completed",
+      "expected_status": "completed",
+      "passed": true,
+      "termination_reason": "completed",
+      "elapsed_s": 179.6,
+      "llm_calls": 14,
+      "supervisor_rounds": 12,
+      "plan_steps": 7,
+      "research_tasks": 0,
+      "tool_statuses": [],
+      "evidence_items": 0,
+      "evidence_sources": [],
+      "raw_data_count": 15,
+      "analysis_iterations": 5,
+      "writer_revisions": 3,
+      "report_length": 1593,
+      "trace": {
+        "total_duration_s": 41.11,
+        "total_llm_calls": 14,
+        "agents": [
+          {
+            "agent": "supervisor",
+            "duration_s": 0.0,
+            "llm_calls": 4,
+            "pct_of_total": 0.0
+          },
+          {
+            "agent": "planner",
+            "duration_s": 6.33,
+            "llm_calls": 1,
+            "pct_of_total": 15.4
+          },
+          {
+            "agent": "researcher",
+            "duration_s": 9.23,
+            "llm_calls": 1,
+            "pct_of_total": 22.5
+          },
+          {
+            "agent": "analyst",
+            "duration_s": 20.08,
+            "llm_calls": 5,
+            "pct_of_total": 48.8
+          },
+          {
+            "agent": "writer",
+            "duration_s": 5.47,
+            "llm_calls": 3,
+            "pct_of_total": 13.3
+          }
+        ]
+      }
+    },
+    {
+      "version": "v2",
+      "case_id": "bilibili_food_knowledge",
+      "status": "completed",
+      "expected_status": "completed",
+      "passed": true,
+      "termination_reason": "completed",
+      "elapsed_s": 119.4,
+      "llm_calls": 6,
+      "supervisor_rounds": 0,
+      "plan_steps": 2,
+      "research_tasks": 2,
+      "tool_statuses": [
+        "success",
+        "success"
+      ],
+      "evidence_items": 20,
+      "evidence_sources": [
+        "bilibili",
+        "generic",
+        "knowledge/historical_reports/美妆短视频内容特征研究.md",
+        "knowledge/historical_reports/美食类短视频爆款分析.md",
+        "knowledge/industry_methodology/短视频爆款选题10个方法.md",
+        "knowledge/industry_methodology/短视频爆款选题公式.md",
+        "knowledge/trend_data/短视频行业数据报告模板.md",
+        "local_knowledge_base"
+      ],
+      "raw_data_count": 20,
+      "analysis_iterations": 2,
+      "writer_revisions": 1,
+      "report_length": 1557,
+      "trace": {
+        "total_duration_s": 74.71,
+        "total_llm_calls": 6,
+        "agents": [
+          {
+            "agent": "entry",
+            "duration_s": 0.0,
+            "llm_calls": 0,
+            "pct_of_total": 0.0
+          },
+          {
+            "agent": "planner_v2",
+            "duration_s": 2.58,
+            "llm_calls": 1,
+            "pct_of_total": 3.5
+          },
+          {
+            "agent": "researcher_v2",
+            "duration_s": 47.27,
+            "llm_calls": 2,
+            "pct_of_total": 63.3
+          },
+          {
+            "agent": "analyst",
+            "duration_s": 19.64,
+            "llm_calls": 2,
+            "pct_of_total": 26.3
+          },
+          {
+            "agent": "writer",
+            "duration_s": 5.22,
+            "llm_calls": 1,
+            "pct_of_total": 7.0
+          }
+        ]
+      }
+    }
+  ]
+}

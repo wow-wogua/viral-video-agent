@@ -1,0 +1,356 @@
+{
+  "audited_at": "2026-07-12",
+  "knowledge_dir": "knowledge",
+  "document_count": 40,
+  "category_counts": {
+    "competitor_analysis": 5,
+    "historical_reports": 7,
+    "industry_methodology": 13,
+    "platform_rules": 9,
+    "trend_data": 6
+  },
+  "platform_counts": {
+    "bilibili": 7,
+    "douyin": 6,
+    "generic": 23,
+    "kuaishou": 3,
+    "xiaohongshu": 1
+  },
+  "content_type_counts": {
+    "analysis_framework": 5,
+    "case_summary": 4,
+    "evidence_framework": 1,
+    "evidence_methodology": 2,
+    "methodology": 12,
+    "official_source_card": 6,
+    "platform_policy": 5,
+    "trend_summary": 5
+  },
+  "source_tier_counts": {
+    "industry": 7,
+    "official": 20,
+    "research": 6,
+    "secondary": 7
+  },
+  "documents_without_source_urls": [],
+  "invalid_urls": [],
+  "reused_source_urls": {
+    "https://member.bilibili.com/platform/home": [
+      "knowledge/competitor_analysis/B站UP主竞品分析框架.md",
+      "knowledge/competitor_analysis/跨平台竞品分析同口径规范.md",
+      "knowledge/industry_methodology/B站爆款视频方法论.md",
+      "knowledge/industry_methodology/平台官方数据优先的内容复盘SOP.md",
+      "knowledge/industry_methodology/平台算法信息可信度分级与引用规范.md",
+      "knowledge/industry_methodology/短视频数据分析与优化方法.md",
+      "knowledge/industry_methodology/短视频选题方法论与框架.md",
+      "knowledge/platform_rules/B站官方创作与规则入口说明.md",
+      "knowledge/platform_rules/B站推荐算法与UP主运营规则.md",
+      "knowledge/platform_rules/B站流量池与推荐算法详解.md"
+    ],
+    "https://ir.bilibili.com/en/financial-information/": [
+      "knowledge/competitor_analysis/B站UP主竞品分析框架.md",
+      "knowledge/platform_rules/B站流量池与推荐算法详解.md",
+      "knowledge/trend_data/2025年短视频平台趋势分析.md"
+    ],
+    "https://school.oceanengine.com/course/6979501987486236679": [
+      "knowledge/competitor_analysis/短视频数据对标分析模板.md",
+      "knowledge/competitor_analysis/短视频竞品分析七步法.md",
+      "knowledge/industry_methodology/短视频爆款选题10个方法.md"
+    ],
+    "https://creator.douyin.com/": [
+      "knowledge/competitor_analysis/短视频数据对标分析模板.md",
+      "knowledge/competitor_analysis/跨平台竞品分析同口径规范.md",
+      "knowledge/historical_reports/2024抖音爆款短视频拆解报告.md",
+      "knowledge/historical_reports/2025抖音流量密码与算法趋势.md",
+      "knowledge/industry_methodology/平台官方数据优先的内容复盘SOP.md",
+      "knowledge/industry_methodology/平台算法信息可信度分级与引用规范.md",
+      "knowledge/industry_methodology/短视频数据分析与优化方法.md",
+      "knowledge/industry_methodology/短视频选题方法论与框架.md",
+      "knowledge/platform_rules/抖音官方创作者服务入口说明.md",
+      "knowledge/platform_rules/抖音算法推荐机制详解.md",
+      "knowledge/platform_rules/抖音违规限流避坑指南.md",
+      "knowledge/trend_data/2025年短视频平台趋势分析.md"
+    ],
+    "https://www.eshutong.com/archives/5567.html": [
+      "knowledge/competitor_analysis/短视频竞品分析七步法.md",
+      "knowledge/competitor_analysis/短视频账号数据分析四维度.md",
+      "knowledge/trend_data/短视频行业数据报告模板.md"
+    ],
+    "https://cp.kuaishou.com/": [
+      "knowledge/competitor_analysis/跨平台竞品分析同口径规范.md",
+      "knowledge/industry_methodology/平台官方数据优先的内容复盘SOP.md",
+      "knowledge/industry_methodology/平台算法信息可信度分级与引用规范.md",
+      "knowledge/industry_methodology/短视频数据分析与优化方法.md",
+      "knowledge/platform_rules/快手官方创作者服务入口说明.md",
+      "knowledge/platform_rules/快手算法与运营规则.md"
+    ],
+    "https://creator.xiaohongshu.com/": [
+      "knowledge/competitor_analysis/跨平台竞品分析同口径规范.md",
+      "knowledge/industry_methodology/平台官方数据优先的内容复盘SOP.md",
+      "knowledge/industry_methodology/平台算法信息可信度分级与引用规范.md",
+      "knowledge/industry_methodology/短视频数据分析与优化方法.md",
+      "knowledge/platform_rules/小红书官方创作者服务入口说明.md",
+      "knowledge/trend_data/2025年短视频平台趋势分析.md"
+    ],
+    "https://school.oceanengine.com/": [
+      "knowledge/historical_reports/2024抖音爆款短视频拆解报告.md",
+      "knowledge/historical_reports/2025抖音流量密码与算法趋势.md",
+      "knowledge/industry_methodology/短视频爆款公式与内容方法论.md",
+      "knowledge/industry_methodology/短视频选题方法论与框架.md",
+      "knowledge/platform_rules/抖音算法推荐机制详解.md"
+    ],
+    "https://www.cnnic.net.cn/": [
+      "knowledge/historical_reports/2024短视频直播与电商生态报告.md",
+      "knowledge/historical_reports/公开行业报告的证据边界说明.md",
+      "knowledge/trend_data/2024年短视频行业关键数据.md"
+    ],
+    "https://www.nrta.gov.cn/": [
+      "knowledge/historical_reports/2024短视频直播与电商生态报告.md",
+      "knowledge/historical_reports/公开行业报告的证据边界说明.md",
+      "knowledge/trend_data/2024年短视频行业关键数据.md"
+    ],
+    "https://www.iresearch.com.cn/": [
+      "knowledge/historical_reports/2024短视频直播与电商生态报告.md",
+      "knowledge/trend_data/2024年短视频行业关键数据.md"
+    ],
+    "https://www.opp2.com/325965.html": [
+      "knowledge/historical_reports/3C数码类短视频内容策略.md",
+      "knowledge/industry_methodology/短视频爆款选题10个方法.md"
+    ],
+    "https://www.bilibili.com/blackboard/help.html": [
+      "knowledge/industry_methodology/B站爆款视频方法论.md",
+      "knowledge/platform_rules/B站官方创作与规则入口说明.md",
+      "knowledge/platform_rules/B站推荐算法与UP主运营规则.md"
+    ],
+    "https://m.36kr.com/p/2322085040332419": [
+      "knowledge/industry_methodology/口播视频爆款公式.md",
+      "knowledge/industry_methodology/短视频爆款选题公式.md"
+    ],
+    "https://www.woshipm.com/operate/5120320.html": [
+      "knowledge/industry_methodology/口播视频爆款公式.md",
+      "knowledge/industry_methodology/抖音爆款方法论深度解析.md",
+      "knowledge/industry_methodology/短视频封面设计技巧.md",
+      "knowledge/industry_methodology/短视频爆款公式与内容方法论.md"
+    ],
+    "https://qn.uqudao.com/0025f8fc7aed34a8c5737775df6e4799.pdf": [
+      "knowledge/industry_methodology/短视频封面设计技巧.md",
+      "knowledge/trend_data/短视频行业数据报告模板.md"
+    ],
+    "https://blog.csdn.net/TuFuir/article/details/145972487": [
+      "knowledge/industry_methodology/短视频爆款选题公式.md",
+      "knowledge/industry_methodology/短视频脚本结构模板.md"
+    ],
+    "https://ir.kuaishou.com/corporate-filings/annual-interim-reports": [
+      "knowledge/platform_rules/快手算法与运营规则.md",
+      "knowledge/trend_data/2025年短视频平台趋势分析.md",
+      "knowledge/trend_data/快手公开财报趋势证据使用指南.md"
+    ],
+    "https://ir.bilibili.com/en/financial-information/?tab=annual-and-interim-reports#annual-and-interim-reports": [
+      "knowledge/trend_data/B站2025-2026趋势数据报告.md",
+      "knowledge/trend_data/B站公开财报趋势证据使用指南.md"
+    ],
+    "https://ir.bilibili.com/en/financial-information/?tab=quarterly-results#quarterly-results": [
+      "knowledge/trend_data/B站2025-2026趋势数据报告.md",
+      "knowledge/trend_data/B站公开财报趋势证据使用指南.md"
+    ]
+  },
+  "missing_categories": [],
+  "missing_platform_rules": [],
+  "missing_topics": [],
+  "url_checks": [
+    {
+      "url": "https://ai.chanmama.com/article/344",
+      "ok": true,
+      "state": "reachable",
+      "status_code": 200
+    },
+    {
+      "url": "https://blog.csdn.net/TuFuir/article/details/145972487",
+      "ok": true,
+      "state": "reachable",
+      "status_code": 200
+    },
+    {
+      "url": "https://cp.kuaishou.com/",
+      "ok": true,
+      "state": "reachable",
+      "status_code": 200
+    },
+    {
+      "url": "https://creator.douyin.com/",
+      "ok": true,
+      "state": "reachable",
+      "status_code": 200
+    },
+    {
+      "url": "https://creator.xiaohongshu.com/",
+      "ok": true,
+      "state": "reachable",
+      "status_code": 200
+    },
+    {
+      "url": "https://ir.bilibili.com/en/financial-information/",
+      "ok": true,
+      "state": "reachable",
+      "status_code": 200
+    },
+    {
+      "url": "https://ir.bilibili.com/en/financial-information/?tab=annual-and-interim-reports#annual-and-interim-reports",
+      "ok": true,
+      "state": "reachable",
+      "status_code": 200
+    },
+    {
+      "url": "https://ir.bilibili.com/en/financial-information/?tab=quarterly-results#quarterly-results",
+      "ok": true,
+      "state": "reachable",
+      "status_code": 200
+    },
+    {
+      "url": "https://ir.kuaishou.com/corporate-filings/annual-interim-reports",
+      "ok": true,
+      "state": "reachable",
+      "status_code": 200
+    },
+    {
+      "url": "https://ir.kuaishou.com/corporate-filings/quarterly-results",
+      "ok": true,
+      "state": "reachable",
+      "status_code": 200
+    },
+    {
+      "url": "https://ixiaguo.com/h-nd-497664.html",
+      "ok": true,
+      "state": "reachable",
+      "status_code": 200
+    },
+    {
+      "url": "https://m.36kr.com/p/2322085040332419",
+      "ok": true,
+      "state": "reachable",
+      "status_code": 200
+    },
+    {
+      "url": "https://member.bilibili.com/platform/home",
+      "ok": true,
+      "state": "access_limited",
+      "status_code": 412
+    },
+    {
+      "url": "https://pdf.hanspub.org/jc20230300000_66980776.pdf",
+      "ok": true,
+      "state": "access_limited",
+      "status_code": 403
+    },
+    {
+      "url": "https://qn.uqudao.com/0025f8fc7aed34a8c5737775df6e4799.pdf",
+      "ok": true,
+      "state": "reachable",
+      "status_code": 200
+    },
+    {
+      "url": "https://school.oceanengine.com/",
+      "ok": false,
+      "state": "unknown",
+      "error": "The read operation timed out"
+    },
+    {
+      "url": "https://school.oceanengine.com/course/6979501987486236679",
+      "ok": false,
+      "state": "unknown",
+      "error": "The read operation timed out"
+    },
+    {
+      "url": "https://www.135editor.com/essences/6407.html",
+      "ok": true,
+      "state": "reachable",
+      "status_code": 200
+    },
+    {
+      "url": "https://www.bilibili.com/blackboard/help.html",
+      "ok": true,
+      "state": "access_limited",
+      "status_code": 412
+    },
+    {
+      "url": "https://www.cbndata.com/report/1721/detail",
+      "ok": true,
+      "state": "reachable",
+      "status_code": 200
+    },
+    {
+      "url": "https://www.cnnic.net.cn/",
+      "ok": true,
+      "state": "reachable",
+      "status_code": 200
+    },
+    {
+      "url": "https://www.eshutong.com/archives/5567.html",
+      "ok": true,
+      "state": "reachable",
+      "status_code": 200
+    },
+    {
+      "url": "https://www.iresearch.com.cn/",
+      "ok": true,
+      "state": "reachable",
+      "status_code": 200
+    },
+    {
+      "url": "https://www.ixunke.com/article/680",
+      "ok": true,
+      "state": "reachable",
+      "status_code": 200
+    },
+    {
+      "url": "https://www.nrta.gov.cn/",
+      "ok": true,
+      "state": "reachable",
+      "status_code": 200
+    },
+    {
+      "url": "https://www.opp2.com/325965.html",
+      "ok": true,
+      "state": "reachable",
+      "status_code": 200
+    },
+    {
+      "url": "https://www.scribd.com/document/756009897/",
+      "ok": true,
+      "state": "reachable",
+      "status_code": 200
+    },
+    {
+      "url": "https://www.sinoss.net/uploadfile/2019/0326/20190326114404783.pdf",
+      "ok": true,
+      "state": "reachable",
+      "status_code": 200
+    },
+    {
+      "url": "https://www.woshipm.com/operate/4150832.html",
+      "ok": true,
+      "state": "reachable",
+      "status_code": 200
+    },
+    {
+      "url": "https://www.woshipm.com/operate/5120320.html",
+      "ok": true,
+      "state": "reachable",
+      "status_code": 200
+    },
+    {
+      "url": "https://zhuanlan.zhihu.com/p/18908499377",
+      "ok": true,
+      "state": "access_limited",
+      "status_code": 403
+    },
+    {
+      "url": "https://zhuanlan.zhihu.com/p/1955316054625596811",
+      "ok": true,
+      "state": "access_limited",
+      "status_code": 403
+    }
+  ],
+  "issues": [],
+  "ready": true
+}

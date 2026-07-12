@@ -15,15 +15,13 @@ def _build_anthropic(
     enable_thinking: bool = False,
     temperature: float | None = None,
 ) -> ChatAnthropic:
-    model_kwargs = {}
-    if not enable_thinking:
-        model_kwargs["thinking"] = {"type": "disabled"}
     kwargs = dict(
         model=model,
         anthropic_api_url=base_url,
         api_key=api_key,
-        model_kwargs=model_kwargs,
     )
+    if not enable_thinking:
+        kwargs["thinking"] = {"type": "disabled"}
     if temperature is not None:
         kwargs["temperature"] = temperature
     return ChatAnthropic(**kwargs)

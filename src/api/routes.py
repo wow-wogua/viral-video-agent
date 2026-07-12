@@ -9,6 +9,7 @@ from src.gateway.cost_tracker import cost_tracker
 from src.utils.fallback_counter import fallback_counter
 from src.utils.trace_tracker import trace_tracker
 from src.prompts.manager import prompt_manager
+from src.api.status import result_status
 
 router = APIRouter()
 graph = build_graph()
@@ -64,12 +65,7 @@ async def _save_to_redis(session_id: str, data: dict):
 
 def _result_status(result: dict) -> tuple[str, str]:
     """把图终止原因转换为API状态，避免空报告仍标记completed。"""
-    termination_reason = result.get("termination_reason", "")
-    if result.get("report_final"):
-        return "completed", termination_reason or "completed"
-    if termination_reason:
-        return "partial", termination_reason
-    return "partial", "report_not_generated"
+    return result_status(result)
 
 
 @router.post("/analyze", response_model=AnalyzeResponse)
