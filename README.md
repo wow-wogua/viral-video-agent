@@ -74,7 +74,7 @@ docker compose up -d
 
 ### 使用微调模型（可选）
 
-Researcher Agent 可以使用 LoRA 微调后的 Qwen3-4B 模型替代 MiMo API。内置 50 条工具调用评测中准确率从 88% 提升至 94%、完全准确率从 54% 提升至 80%；独立 hard eval / holdout 未证明自然表达边界提升，因此该模型当前作为 Researcher 的可选 A/B 路径，默认链路仍可继续使用 MiMo API。
+Researcher Agent 可以将 LoRA 微调后的 Qwen3-4B 作为 MiMo API 的本地 A/B 路径。内置 50 条工具调用评测中准确率从 88% 提升至 94%、完全准确率从 54% 提升至 80%；但当前以 `base + direct adapter` 为主口径的 hard44/holdout20 公平实验没有形成稳定基座优势，因此默认链路仍使用 API 模型，不把微调模型描述为生产替代。
 
 ```bash
 # 终端1：启动微调模型 API（需要先训练，见 tool-calling-finetune 项目）
@@ -88,7 +88,7 @@ $env:FINETUNED_MODEL_URL="http://host.docker.internal:8002/v1"
 docker compose up -d
 ```
 
-只有 Researcher 使用微调模型，其他 Agent（Supervisor/Planner/Analyst/Writer）仍用 MiMo API。同一 hard44/holdout20、同一完整 Prompt 和相同生成参数的公平实验已经完成：SFT+DPO v3 与基座的对应汇总指标相同，没有证明微调泛化提升；显式路由规则只在 hard 集提高工具名准确率，却让 holdout 工具名准确率从 100% 降到 80%，因此当前不设为默认。
+只有 Researcher 使用微调模型，其他 Agent（Supervisor/Planner/Analyst/Writer）仍用 MiMo API。同一 hard44/holdout20 和相同生成参数下，direct adapter 在默认 Prompt 上低于基座；rules Prompt 只改善部分完全准确率，Safe 指标和最稳基座配置仍无稳定优势。旧 4-bit merged 产物与基座完全相同属于导出路径风险，已不再作为微调效果依据；本地服务现在默认直接加载 4-bit 基座 + adapter。
 
 **关闭：**
 - 终端1：Ctrl+C
@@ -104,7 +104,7 @@ docker compose up -d
 | LLM-as-Judge 评测框架 | 5 维度打分；当前支持温度 0、默认重复 3 次取均值，旧对比结果仍是单次历史试验 |
 | BFCL 风格工具选择 | 2026-07-11 旧全工具集35条：工具名30/35、已标注参数14/31、完全14/35；暴露 `none` 过度调用与参数文案不稳定，未通过改旧题 Prompt 追分 |
 | v2 能力范围路由 | 冻结 dev 21/23（91.3%）；独立 holdout 13/13。只评当前可用能力，不等同官方 BFCL 或开放域泛化 |
-| 微调模型工具准确率 | 内置50条历史为88%→94%；同 Prompt hard44/holdout20 公平实验中 SFT+DPO v3 与基座对应指标相同，未证明泛化提升 |
+| 微调模型工具准确率 | 内置50条历史为88%→94%；direct adapter在默认Prompt下低于基座，rules Prompt仅部分指标改善且Safe无稳定优势；旧4-bit merged结果仅作导出风险诊断 |
 | tau-bench-inspired 冒烟检查 | 2026-07-11 当前严格18条为13/18（72.2%）：simple 3/3、medium 3/3、complex 5/5、edge 2/7；5条边界失败均为安全短路后缺少 `plan`，通过用例平均161.8秒。历史18/18只作旧规则记录 |
 | RAG 来源 Recall@5 | 40 篇、235 个标题感知 chunk；2026-07-12 固定集28/28命中，来源审计通过。这是自建固定集，不代表开放域泛化 |
 | v1/v2 架构 A/B | B站科技：164.8s→79.4s、LLM 16→7；B站美食+RAG：179.6s→119.4s、LLM 14→6。两组均 completed，报告长度同量级；仍需扩大任务集评估质量 |
