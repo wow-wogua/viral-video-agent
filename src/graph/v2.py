@@ -1,5 +1,6 @@
 """Architecture v2：确定性主流程 + 证据门禁。"""
 
+import hashlib
 import json
 from datetime import datetime, timezone
 
@@ -161,34 +162,37 @@ async def planner_v2_node(state: AgentState) -> dict:
     }
 
 
-def _build_evidence(tool_name: str, params: dict, data: list) -> dict:
-    references = []
-    sources = set()
-    for item in data:
-        if isinstance(item, dict):
-            if item.get("url"):
-                references.append(item["url"])
-            if item.get("source_url"):
-                references.append(item["source_url"])
-            references.extend(item.get("source_urls", []))
-            if item.get("source"):
-                sources.add(str(item["source"]))
-            if item.get("platform"):
-                sources.add(str(item["platform"]))
-    if tool_name == "rag_search":
-        sources.add("local_knowledge_base")
-    elif tool_name == "get_transcript":
-        sources.add("xfyun_transcript")
-    elif tool_name == "get_trend_data":
-        sources.add("mock_trend" if data else "unavailable")
-    return {
-        "tool": tool_name,
-        "params": params,
-        "sources": sorted(sources),
-        "references": list(dict.fromkeys(references))[:10],
-        "sample_count": len(data),
-        "fetched_at": datetime.now(timezone.utc).isoformat(),
-    }
+def stable_evidence_id(tool_name: str, item: dict) -> str:
+    identity = _data_identity(item)
+    return f"ev_{hashlib.sha256(f'{tool_name}|{identity}'.encode()).hexdigest()[:16]}"
+
+
+def _build_evidence_items(tool_name: str, params: dict, data: list) -> tuple[list, list[dict]]:
+    normalized_data, evidence_items = [], []
+    fetched_at = datetime.now(timezone.utc).isoformat()
+    source_type = {"search_videos": "bilibili_video", "rag_search": "knowledge_base", "get_transcript": "transcript", "get_trend_data": "trend_data"}.get(tool_name, "tool_result")
+    data_field_names = {"bvid", "author", "view", "danmaku", "reply", "favorite", "coin", "share", "like", "duration", "pubdate", "aid"}
+    for raw_item in data:
+        item = raw_item if isinstance(raw_item, dict) else {"value": raw_item}
+        evidence_id = stable_evidence_id(tool_name, item)
+        annotated = {**item, "_evidence_id": evidence_id}
+        normalized_data.append(annotated)
+        source_urls = item.get("source_urls") or []
+        source_url = item.get("url") or item.get("source_url") or (source_urls[0] if source_urls else None)
+        evidence_items.append({
+            "evidence_id": evidence_id,
+            "tool": tool_name,
+            "source_type": source_type,
+            "title": str(item.get("title") or item.get("source") or params.get("query") or params.get("keyword") or "Evidence"),
+            "source_url": source_url,
+            "platform": str(item.get("platform") or ("bilibili" if tool_name == "search_videos" else "local")),
+            "fetched_at": fetched_at,
+            "raw_data": item,
+            "summary": item.get("summary") or item.get("content", "")[:300] or None,
+            "data_fields": {key: value for key, value in item.items() if key in data_field_names},
+            "transcript_segment": item.get("transcript_segment"),
+        })
+    return normalized_data, evidence_items
 
 
 def _data_identity(item) -> str:
@@ -250,15 +254,14 @@ async def researcher_v2_node(state: AgentState) -> dict:
             outcome["params"] = normalized_params
             raw_result = await call_tool_via_mcp(tool_name, normalized_params)
             fetched_data = raw_result if isinstance(raw_result, list) else ([] if raw_result is None else [raw_result])
-            raw_data = dedupe_new_data(fetched_data, state.get("raw_data", []))
+            unique_data = dedupe_new_data(fetched_data, state.get("raw_data", []))
+            raw_data, evidence = _build_evidence_items(tool_name, normalized_params, unique_data)
             if raw_data:
                 outcome["status"] = "success"
             elif fetched_data:
                 outcome["status"] = "duplicate_only"
             else:
                 outcome["status"] = "empty"
-            if raw_data:
-                evidence.append(_build_evidence(tool_name, normalized_params, raw_data))
             fallback_counter.log("researcher_v2", "json")
         except ToolUnavailableError as exc:
             outcome.update(status="unavailable", error=str(exc))
@@ -288,7 +291,7 @@ def route_research(state: AgentState) -> str:
 
 def evidence_gate_node(state: AgentState) -> dict:
     evidence = state.get("evidence", [])
-    evidence_count = sum(item.get("sample_count", 0) for item in evidence)
+    evidence_count = len(evidence)
     if evidence_count >= V2_MIN_EVIDENCE_ITEMS:
         return {"data_sufficient": True}
 

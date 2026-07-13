@@ -25,7 +25,7 @@ class GraphV2Tests(unittest.TestCase):
 
     def test_evidence_gate_accepts_real_evidence(self):
         result = evidence_gate_node({
-            "evidence": [{"sample_count": 3}],
+            "evidence": [{"evidence_id": "ev_1"}],
             "tool_results": [{"status": "success"}],
         })
         self.assertTrue(result["data_sufficient"])

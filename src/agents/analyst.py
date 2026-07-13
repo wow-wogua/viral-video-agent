@@ -37,6 +37,30 @@ async def analyst_node(state: AgentState) -> dict:
 
     # 尝试解析 JSON
     result = _parse_analysis(text)
+    valid_evidence_ids = {
+        item.get("_evidence_id")
+        for item in raw_data
+        if isinstance(item, dict) and item.get("_evidence_id")
+    }
+    claims = []
+    for claim in result.get("claims", []):
+        if not isinstance(claim, dict) or not claim.get("claim"):
+            continue
+        claim_type = claim.get("claim_type", "inference")
+        if claim_type not in {"observation", "inference", "recommendation"}:
+            claim_type = "inference"
+        evidence_ids = [item for item in claim.get("evidence_ids", []) if item in valid_evidence_ids]
+        if claim_type == "observation" and not evidence_ids:
+            continue
+        claims.append({
+            "claim": str(claim["claim"]),
+            "claim_type": claim_type,
+            "evidence_ids": evidence_ids,
+            "confidence": min(1.0, max(0.0, float(claim.get("confidence", result.get("confidence", 0.7))))),
+        })
+    if not claims:
+        claims = [{"claim": str(item), "claim_type": "inference", "evidence_ids": sorted(valid_evidence_ids), "confidence": result.get("confidence", 0.7)} for item in result.get("insights", [])[:5]]
+    result["claims"] = claims
 
     trace_tracker.end_agent("analyst")
     return {

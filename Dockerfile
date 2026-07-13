@@ -2,6 +2,10 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+
 # pip 使用清华镜像
 RUN pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
 

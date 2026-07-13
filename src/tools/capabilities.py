@@ -5,7 +5,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, ValidationError, field_validator
 
-from src.config import ENABLE_MOCK_TOOLS, XFYUN_APPID, XFYUN_SECRET_KEY
+from src.config import ENABLE_MOCK_TOOLS
+from src.tools.transcript import transcript_capability
 
 
 class ToolUnavailableError(ValueError):
@@ -61,7 +62,7 @@ class ToolCapability:
 
 
 def get_tool_capabilities() -> dict[str, ToolCapability]:
-    transcript_enabled = bool(XFYUN_APPID and XFYUN_SECRET_KEY)
+    transcript_enabled, transcript_provider = transcript_capability()
     return {
         "search_videos": ToolCapability(
             name="search_videos",
@@ -81,10 +82,11 @@ def get_tool_capabilities() -> dict[str, ToolCapability]:
         ),
         "get_transcript": ToolCapability(
             name="get_transcript",
-            description="通过已配置的讯飞服务转写指定视频",
+            description=f"通过已配置的 {transcript_provider} 服务转写公开B站视频",
             params_model=TranscriptParams,
             enabled=transcript_enabled,
-            availability="real" if transcript_enabled else "unconfigured",
+            availability=transcript_provider,
+            supported_platforms=("bilibili",),
         ),
         "get_trend_data": ToolCapability(
             name="get_trend_data",

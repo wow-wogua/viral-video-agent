@@ -116,7 +116,12 @@ versions:
       - 数据缺失时明确写“数据不足”，不要编造占比、提升幅度或行业平均值
       - 不要把单个样本直接概括为普遍规律
 
-      输出JSON: {{"summary": "...", "topic": "...", "insights": ["..."], "confidence": 0.0-1.0}}
+      Evidence约束:
+      - 每条原始数据都带有 _evidence_id；Observation 必须引用真实存在的 _evidence_id
+      - Inference 和 Recommendation 可以引用支持它们的 evidence_id，但不得编造 ID
+      - 数值型 Observation 没有对应 Evidence 时不要输出
+
+      输出JSON: {{"summary": "...", "topic": "...", "claims": [{{"claim": "...", "claim_type": "observation|inference|recommendation", "evidence_ids": ["ev_xxx"], "confidence": 0.0}}], "confidence": 0.0-1.0}}
 
     # ── Writer 报告生成（初稿）──
     writer_draft: |
@@ -130,6 +135,9 @@ versions:
       - 只能引用原始数据和分析结果中真实存在的数字
       - 缺少播放、点赞、评论等数据时明确说明局限，不得补写精确比例
       - 区分“数据观察”“推测”和“建议”，不要把推测写成已验证结论
+      - 只使用分析结果 claims 中的结论，不新增事实性结论
+      - 每条关键观察在句末标注已有 Evidence 编号，格式为 [ev_xxx]
+      - 不得输出原始数据中不存在的 Evidence 编号
 
       要求:
       1. 报告必须与用户查询的主题紧密相关，不要写泛泛的通用内容

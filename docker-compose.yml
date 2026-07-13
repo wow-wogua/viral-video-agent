@@ -1,58 +1,41 @@
 services:
-  # --- 后端 API ---
-  app:
-    build: .
-    ports:
-      - "8000:8000"
-    env_file: .env
+  postgres:
+    image: postgres:16-alpine
     environment:
-      - REDIS_URL=redis://redis:6379/0
-      - CHROMA_HOST=chromadb
-      - CHROMA_PORT=8000
-      - HF_ENDPOINT=https://hf-mirror.com
-      - USE_FINETUNED_MODEL=${USE_FINETUNED_MODEL:-false}
-      - FINETUNED_MODEL_URL=${FINETUNED_MODEL_URL:-http://host.docker.internal:8002/v1}
-      - ANALYSIS_CONFIDENCE_THRESHOLD=${ANALYSIS_CONFIDENCE_THRESHOLD:-0.8}
-      - GRAPH_VERSION=${GRAPH_VERSION:-v2}
-      - V2_ANALYST_MAX_ITERATIONS=${V2_ANALYST_MAX_ITERATIONS:-2}
-      - V2_WRITER_MAX_REVISIONS=${V2_WRITER_MAX_REVISIONS:-1}
-      - V2_MIN_EVIDENCE_ITEMS=${V2_MIN_EVIDENCE_ITEMS:-1}
-      - PROMPT_VERSION=${PROMPT_VERSION:-v1}
-      - MCP_SERVER_URL=http://mcp-server:8001/sse
-      - ENABLE_MOCK_TOOLS=${ENABLE_MOCK_TOOLS:-false}
-    depends_on:
-      - chromadb
-      - redis
-      - mcp-server
+      POSTGRES_DB: ${POSTGRES_DB:-viral_video}
+      POSTGRES_USER: ${POSTGRES_USER:-viral_video}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-local-dev-change-me}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-viral_video} -d ${POSTGRES_DB:-viral_video}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
     volumes:
-      - ./knowledge:/app/knowledge
-      - embedding_cache:/root/.cache/chroma
+      - postgres_data:/var/lib/postgresql/data
 
-  # --- 前端 ---
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
     ports:
-      - "3000:3000"
-    environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:8000
-      - BACKEND_URL=http://app:8000
-    depends_on:
-      - app
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    volumes:
+      - redis_data:/data
 
-  # --- 向量数据库 ---
   chromadb:
     image: chromadb/chroma:latest
     ports:
       - "8500:8000"
+    environment:
+      IS_PERSISTENT: "TRUE"
+      ANONYMIZED_TELEMETRY: "FALSE"
     volumes:
       - chroma_data:/chroma/chroma
-    environment:
-      - IS_PERSISTENT=TRUE
-      - ANONYMIZED_TELEMETRY=FALSE
 
-  # --- MCP Server ---
   mcp-server:
     build: .
     command: python -m src.tools.mcp_server
@@ -60,36 +43,97 @@ services:
       - "8001:8001"
     env_file: .env
     environment:
-      - CHROMA_HOST=chromadb
-      - CHROMA_PORT=8000
-      - HF_ENDPOINT=https://hf-mirror.com
-      - ENABLE_MOCK_TOOLS=${ENABLE_MOCK_TOOLS:-false}
+      CHROMA_HOST: chromadb
+      CHROMA_PORT: 8000
+      HF_ENDPOINT: https://hf-mirror.com
+      ENABLE_MOCK_TOOLS: ${ENABLE_MOCK_TOOLS:-false}
     depends_on:
       - chromadb
     volumes:
       - embedding_cache:/root/.cache/chroma
 
-  # --- 缓存 / 历史记录 ---
-  redis:
-    image: redis:7-alpine
+  app:
+    build: .
+    command: sh -c "alembic upgrade head && uvicorn src.main:app --host 0.0.0.0 --port 8000"
     ports:
-      - "6379:6379"
+      - "8000:8000"
+    env_file: .env
+    environment:
+      APP_ENV: ${APP_ENV:-development}
+      JWT_SECRET: ${JWT_SECRET:-dev-only-change-me-at-least-32-bytes}
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-viral_video}:${POSTGRES_PASSWORD:-local-dev-change-me}@postgres:5432/${POSTGRES_DB:-viral_video}
+      REDIS_URL: redis://redis:6379/0
+      CHROMA_HOST: chromadb
+      CHROMA_PORT: 8000
+      HF_ENDPOINT: https://hf-mirror.com
+      MCP_SERVER_URL: http://mcp-server:8001/sse
+      USE_FINETUNED_MODEL: ${USE_FINETUNED_MODEL:-false}
+      FINETUNED_MODEL_URL: ${FINETUNED_MODEL_URL:-http://host.docker.internal:8002/v1}
+      GRAPH_VERSION: ${GRAPH_VERSION:-v2}
+      ENABLE_MOCK_TOOLS: ${ENABLE_MOCK_TOOLS:-false}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      chromadb:
+        condition: service_started
+      mcp-server:
+        condition: service_started
     volumes:
-      - redis_data:/data
-    command: redis-server --appendonly yes
+      - ./knowledge:/app/knowledge:ro
+      - embedding_cache:/root/.cache/chroma
 
-  # --- 反向代理 ---
+  worker:
+    build: .
+    command: arq src.worker.WorkerSettings
+    env_file: .env
+    environment:
+      APP_ENV: ${APP_ENV:-development}
+      JWT_SECRET: ${JWT_SECRET:-dev-only-change-me-at-least-32-bytes}
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-viral_video}:${POSTGRES_PASSWORD:-local-dev-change-me}@postgres:5432/${POSTGRES_DB:-viral_video}
+      REDIS_URL: redis://redis:6379/0
+      CHROMA_HOST: chromadb
+      CHROMA_PORT: 8000
+      MCP_SERVER_URL: http://mcp-server:8001/sse
+      GRAPH_VERSION: ${GRAPH_VERSION:-v2}
+      ENABLE_MOCK_TOOLS: ${ENABLE_MOCK_TOOLS:-false}
+      WORKER_MAX_JOBS: ${WORKER_MAX_JOBS:-2}
+      JOB_TIMEOUT_SECONDS: ${JOB_TIMEOUT_SECONDS:-600}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      mcp-server:
+        condition: service_started
+    volumes:
+      - ./knowledge:/app/knowledge:ro
+      - embedding_cache:/root/.cache/chroma
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      BACKEND_URL: http://app:8000
+    depends_on:
+      - app
+
   nginx:
     image: nginx:alpine
     ports:
       - "80:80"
     volumes:
-      - ./nginx.conf:/etc/nginx/conf.d/default.conf
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
     depends_on:
       - frontend
       - app
 
 volumes:
-  chroma_data:
+  postgres_data:
   redis_data:
+  chroma_data:
   embedding_cache:

@@ -1,8 +1,10 @@
 from fastapi import FastAPI
+from src.api.errors import AppError, app_error_handler
 from src.api.routes import router
 from src.gateway.model_registry import model_registry
 
 app = FastAPI(title="爆款视频分析系统")
+app.add_exception_handler(AppError, app_error_handler)
 app.include_router(router)
 
 # 注册微调后的工具调用模型（可选，通过环境变量控制是否启用）

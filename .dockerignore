@@ -11,6 +11,10 @@ __pycache__
 
 frontend/node_modules
 frontend/.next
+backups
+tmp
+*.mp3
+*.wav
 
 chroma_data
 redis_data

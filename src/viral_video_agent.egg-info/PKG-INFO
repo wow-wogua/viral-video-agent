@@ -3,9 +3,10 @@ Name: viral-video-agent
 Version: 0.1.0
 Summary: 短视频平台爆款视频分析多智能体系统
 Requires-Python: >=3.10
-Requires-Dist: langgraph>=0.2.0
+Requires-Dist: langgraph<1.1.0,>=0.2.0
 Requires-Dist: langchain-core<1.0.0,>=0.3.0
-Requires-Dist: langchain-anthropic>=0.3.0
+Requires-Dist: langchain-anthropic<1.0.0,>=0.3.0
+Requires-Dist: langchain-openai<1.0.0,>=0.3.0
 Requires-Dist: fastapi>=0.115.0
 Requires-Dist: uvicorn[standard]>=0.30.0
 Requires-Dist: python-dotenv>=1.0.0
@@ -16,7 +17,18 @@ Requires-Dist: chromadb>=0.5.0
 Requires-Dist: tiktoken>=0.7.0
 Requires-Dist: mcp>=1.0.0
 Requires-Dist: redis>=5.0.0
-Provides-Extra: postgres
-Requires-Dist: langgraph-store-postgres>=0.1.0; extra == "postgres"
-Requires-Dist: psycopg[binary]>=3.0.0; extra == "postgres"
-Requires-Dist: asyncpg>=0.30.0; extra == "postgres"
+Requires-Dist: pyyaml>=6.0
+Requires-Dist: sqlalchemy[asyncio]<2.1.0,>=2.0.36
+Requires-Dist: asyncpg<1.0.0,>=0.30.0
+Requires-Dist: alembic<2.0.0,>=1.14.0
+Requires-Dist: arq<1.0.0,>=0.26.1
+Requires-Dist: pyjwt<3.0.0,>=2.10.0
+Requires-Dist: pwdlib[argon2]<1.0.0,>=0.2.1
+Requires-Dist: email-validator<3.0.0,>=2.2.0
+Requires-Dist: openai<2.0.0,>=1.59.0
+Requires-Dist: yt-dlp>=2025.6.30
+Provides-Extra: dev
+Requires-Dist: pytest<9.0.0,>=8.3.0; extra == "dev"
+Requires-Dist: pytest-asyncio<1.0.0,>=0.25.0; extra == "dev"
+Requires-Dist: aiosqlite<1.0.0,>=0.20.0; extra == "dev"
+Requires-Dist: asgi-lifespan<3.0.0,>=2.1.0; extra == "dev"
