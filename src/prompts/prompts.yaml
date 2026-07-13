@@ -120,6 +120,8 @@ versions:
       - 每条原始数据都带有 _evidence_id；Observation 必须引用真实存在的 _evidence_id
       - Inference 和 Recommendation 可以引用支持它们的 evidence_id，但不得编造 ID
       - 数值型 Observation 没有对应 Evidence 时不要输出
+      - summary 不超过 200 个中文字符；claims 输出 3～5 条，每条 claim 不超过 120 个中文字符
+      - 只输出一个完整 JSON 对象，不要代码块、解释或额外文本
 
       输出JSON: {{"summary": "...", "topic": "...", "claims": [{{"claim": "...", "claim_type": "observation|inference|recommendation", "evidence_ids": ["ev_xxx"], "confidence": 0.0}}], "confidence": 0.0-1.0}}
 

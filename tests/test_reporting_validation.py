@@ -20,6 +20,11 @@ class ReportingValidationTests(unittest.TestCase):
         valid, _ = validate_claims([{"claim": "x", "claim_type": "observation", "evidence_ids": []}], self.evidence)
         self.assertFalse(valid)
 
+    def test_evidence_requires_at_least_one_structured_claim(self):
+        valid, reason = validate_claims([], self.evidence)
+        self.assertFalse(valid)
+        self.assertIn("no structured claims", reason)
+
     def test_deterministic_appendix_contains_claim_and_source(self):
         content = finalize_report("# 报告", [{"claim": "样本观察", "claim_type": "observation", "evidence_ids": ["ev_12345678"]}], self.evidence)
         self.assertIn("[ev_12345678]", content)

@@ -10,7 +10,7 @@ class ModelRegistry:
         self.MODELS[agent_name] = model_config
         print(f"[registry] registered: {agent_name} -> {model_config.get('model', 'unknown')}")
 
-    def register_deepseek(self, agent_name: str, model: str = "deepseek-chat"):
+    def register_deepseek(self, agent_name: str, model: str = "deepseek-v4-pro"):
         """快捷注册 DeepSeek 模型。"""
         self.MODELS[agent_name] = {"provider": "deepseek", "model": model}
         print(f"[registry] registered deepseek: {agent_name} -> {model}")

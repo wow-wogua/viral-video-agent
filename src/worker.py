@@ -6,7 +6,7 @@ from arq import Retry
 from arq.connections import RedisSettings
 
 from src.api.errors import ERROR_MESSAGES
-from src.config import JOB_MAX_RETRIES, JOB_TIMEOUT_SECONDS, LLM_MODEL_ID, REDIS_URL, WORKER_MAX_JOBS
+from src.config import ASR_MAX_VIDEOS, ASR_MAX_VIDEO_SECONDS, DEFAULT_LLM_MODEL_ID, DEFAULT_LLM_PROVIDER, JOB_MAX_RETRIES, JOB_TIMEOUT_SECONDS, REDIS_URL, WORKER_MAX_JOBS
 from src.db.models import EvidenceItem, Report, UsageRecord
 from src.db.session import async_session_factory
 from src.gateway.cost_tracker import cost_tracker
@@ -21,6 +21,20 @@ from src.utils.trace_tracker import trace_tracker
 from src.tools.transcript import TranscriptError, get_transcript
 
 graph = build_graph()
+
+
+def _select_transcript_candidates(raw_data: list[dict], limit: int, max_seconds: int = ASR_MAX_VIDEO_SECONDS) -> list[str]:
+    candidates: list[str] = []
+    for item in raw_data:
+        if not isinstance(item, dict):
+            continue
+        url = item.get("url") or item.get("source_url")
+        duration = item.get("duration")
+        if duration and float(duration) > max_seconds:
+            continue
+        if url and "bilibili.com" in url and url not in candidates:
+            candidates.append(url)
+    return candidates[:limit]
 
 
 async def _event(job_id: uuid.UUID, event_type: str, message: str, progress: int, level: str = "info", redis=None) -> None:
@@ -50,14 +64,10 @@ async def _invoke_graph(job_id: uuid.UUID, user_id: uuid.UUID, query: str, platf
 
 
 async def _enrich_deep_analysis(result: dict, job_id: uuid.UUID, redis=None) -> dict:
-    candidates = []
-    for item in result.get("raw_data", []):
-        if not isinstance(item, dict): continue
-        url = item.get("url") or item.get("source_url")
-        if url and "bilibili.com" in url and url not in candidates: candidates.append(url)
+    candidates = _select_transcript_candidates(result.get("raw_data", []), ASR_MAX_VIDEOS, ASR_MAX_VIDEO_SECONDS)
     transcript_data, transcript_evidence, total_seconds = [], [], 0.0
-    for index, url in enumerate(candidates[:5], 1):
-        await _event(job_id, "transcribing", f"正在转写代表视频 {index}/{min(len(candidates), 5)}。", 45 + index * 4, redis=redis)
+    for index, url in enumerate(candidates, 1):
+        await _event(job_id, "transcribing", f"正在转写本次样本中的公开视频 {index}/{len(candidates)}。", 45 + index * 4, redis=redis)
         try:
             transcript = await get_transcript(url)
         except TranscriptError:
@@ -108,7 +118,7 @@ async def _persist_result(job_id: uuid.UUID, result: dict) -> uuid.UUID:
         job = await repo.get(job_id)
         if not job or job.status == "cancelled":
             raise asyncio.CancelledError
-        report = Report(job_id=job.id, user_id=job.user_id, title=job.query[:300], content=content, structured_claims=claims, status=status, model_info={"model": LLM_MODEL_ID, "workflow": result.get("workflow_version", "v2"), "trace": trace, "fallback": fallback_counter.get_summary()})
+        report = Report(job_id=job.id, user_id=job.user_id, title=job.query[:300], content=content, structured_claims=claims, status=status, model_info={"provider": DEFAULT_LLM_PROVIDER, "model": DEFAULT_LLM_MODEL_ID, "workflow": result.get("workflow_version", "v2"), "trace": trace, "fallback": fallback_counter.get_summary()})
         db.add(report)
         await db.flush()
         for item in evidence:
@@ -147,6 +157,10 @@ async def run_analysis_job(ctx: dict, job_id_value: str) -> None:
     except Exception as exc:
         code, retryable = _error_code(exc)
         if "REPORT_VALIDATION_FAILED" in str(exc): code, retryable = "REPORT_VALIDATION_FAILED", False
+        if code == "REPORT_VALIDATION_FAILED":
+            print(f"[worker] {code}: {str(exc)[:240]}")
+        else:
+            print(f"[worker] {code}: {type(exc).__name__}")
         async with async_session_factory() as db:
             repo = JobRepository(db); job = await repo.get(job_id)
             if not job or job.status == "cancelled": return

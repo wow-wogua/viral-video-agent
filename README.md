@@ -90,15 +90,25 @@ POSTGRES_PASSWORD=replace-with-a-strong-password
 JWT_SECRET=replace-with-at-least-32-random-bytes
 ```
 
-通用 MiMo LLM 继续使用 Anthropic 兼容接口：
+产品 Worker 默认使用允许应用后端调用的 DeepSeek API：
 
 ```dotenv
-ANTHROPIC_API_KEY=
-ANTHROPIC_BASE_URL=https://token-plan-cn.xiaomimimo.com/anthropic
-LLM_MODEL_ID=mimo-v2.5-pro
+DEFAULT_LLM_PROVIDER=deepseek
+DEEPSEEK_API_KEY=
+DEEPSEEK_BASE_URL=https://api.deepseek.com
+DEEPSEEK_MODEL_ID=deepseek-v4-pro
 ```
 
-MiMo ASR 使用独立 OpenAI 兼容接口：
+如需把 Agent LLM 切换为余额扣费 MiMo 公共 OpenAI 兼容接口：
+
+```dotenv
+DEFAULT_LLM_PROVIDER=mimo
+MIMO_API_KEY=
+MIMO_OPENAI_BASE_URL=https://api.xiaomimimo.com/v1
+MIMO_CHAT_MODEL_ID=mimo-v2.5-pro
+```
+
+MiMo ASR 使用独立客户端和同一公共 OpenAI 兼容地址：
 
 ```dotenv
 MIMO_API_KEY=
@@ -106,9 +116,10 @@ MIMO_ASR_BASE_URL=https://api.xiaomimimo.com/v1
 MIMO_ASR_MODEL=mimo-v2.5-asr
 MIMO_ASR_LANGUAGE=zh
 TRANSCRIPT_PROVIDER=mimo
+ASR_MAX_VIDEOS=5
 ```
 
-同一个 Key 可以复用，但两个协议客户端不能混用。没有配置 ASR 时，前端禁用内容深度分析；转写失败时 Worker 降级为元数据分析，不编造视频内容。
+同一把余额扣费 Key 可以同时用于 MiMo Agent LLM 和 ASR，但 LLM 路由与转写仍使用独立客户端。MiMo Token Plan 另有 `https://token-plan-cn.xiaomimimo.com/v1` OpenAI 兼容地址并包含 ASR 模型，但其页面明确限制为兼容 AI 编程/智能体工具中的交互式使用，不可用于自动化脚本或应用后端，因此本项目 Worker 不使用 Token Plan Key。`ASR_MAX_VIDEOS` 只允许 1～5，默认 5；内容深度分析从本次返回样本中选择最多 N 个唯一的公开 B 站视频，不是全站质量 Top N。没有配置可用于应用后端的 ASR Key 时，前端禁用内容深度分析；转写失败时 Worker 降级为元数据分析，不编造视频内容。用户不需要上传音频，Worker 会自动提取公开视频音频。
 
 ## 后台任务 API
 
@@ -151,6 +162,7 @@ Analyst 输出：
 
 Worker 镜像内置 `ffmpeg` 和 `yt-dlp`。内容深度分析只处理公开可访问且用户有权分析的 B 站内容：
 
+- 从本次排行榜/热门池返回并经标题过滤的样本中选择最多 `ASR_MAX_VIDEOS` 个唯一视频，不代表 B 站全站搜索或质量 Top N
 - 仅接受 B 站 HTTPS URL，不绕过登录、付费或访问控制
 - 最长 600 秒，Base64 后最大 10MB
 - 音频只在 `tmp/` 临时存在，任务后自动删除且禁止提交
@@ -173,7 +185,19 @@ cd ..
 docker compose config --quiet
 ```
 
-当前验收：43 条 Python 测试，其中包含 20 条冻结 B 站产品输入回归；完整记录见 [验收文档](docs/validation-20260713.md)。
+当前验收：56 条 Python 测试，其中包含 20 条冻结 B 站产品输入回归；完整记录见 [验收文档](docs/validation-20260713.md)。
+
+### 真实 API 冒烟（2026-07-13）
+
+- 标准分析通过一次真实产品链路：认证 → PostgreSQL job → Arq Worker → MiMo LLM → 25 条 Evidence → 报告与用量 → 分享。耗时 96.16 秒、6 次 LLM、输入/输出 22900/3238 token、无重试、`asr_seconds=0`。
+- 该标准任务是单次本地端到端冒烟（n=1），不代表线上性能。报告引用校验通过，但暴露了 Analyst thinking-only 导致结构化 claims 为空的问题；现已关闭结构化节点 thinking、提高 Analyst/Writer 输出预算，并增加“有 Evidence 时 claims 不能为空”的发布门禁。
+- 深度分析通过一次真实链路：DeepSeek Agent LLM + MiMo `mimo-v2.5-asr`。任务 `completed`，耗时约 104.24 秒，8 次 LLM，输入/输出 27982/6198 token，估算成本 `$0.005613`；自动提取并转写 329.676 秒公开 B 站音频，得到 1126 字符转写、5 条结构化 claims 和 1 条有效 Transcript Evidence。
+- Redis 的 BVID 与 `audio_hash` 两个缓存键均写入，TTL 约 30 天；再次读取时将 Provider 与音频提取替换为必然失败实现，仍命中同一缓存，因此未发生第二次 ASR 调用。`/app/tmp` 无音频残留，PostgreSQL 与日志未发现原始音频、Base64 或 Key。
+- 真实任务还暴露了两处收口问题：报告模型元数据仍记录旧的 MiMo 常量；另一次无效 `get_transcript` 工具调用的错误字符串被包装成 Transcript Evidence。现已按实际默认 Provider 写入模型元数据，并拒绝 MCP 错误结果和非结构化转写进入 Evidence。没有为这两处确定性修复重复提交收费任务。
+- 两次任务都只是单次本地端到端冒烟（各 n=1），不代表线上性能、真实用户完成率或大规模 ASR 成功率；项目尚未部署。
+- DeepSeek 官方模型列表已迁移为 `deepseek-v4-flash` / `deepseek-v4-pro`，旧 `deepseek-chat` 与 `deepseek-reasoner` 将于 2026-07-24 15:59 UTC 废弃。项目默认切到 `deepseek-v4-pro`，并通过 `extra_body.thinking.type=disabled` 显式关闭结构化节点的默认 thinking。
+- 使用项目真实 `ChatOpenAI` 客户端做最小迁移冒烟：返回模型为 `deepseek-v4-pro`，正文非空且没有 `reasoning_content`，证明官方 thinking 开关已正确透传；这不是一次完整产品任务。
+- 切换后再通过正常产品链路完成一次 V4 Pro 标准任务：69.16 秒、5 次 LLM、12993/3333 token、估算 `$0.008552`、5 条 claims、25 条 Evidence、无重试、`asr_seconds=0`。该结果仍是本地 n=1 冒烟。
 
 ## 研究评测边界
 

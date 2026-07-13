@@ -71,11 +71,14 @@ class MiMoASRProvider(TranscriptProvider):
         if len(encoded) > ASR_MAX_BASE64_BYTES:
             raise AudioTooLargeError("base64 audio exceeds 10MB")
         mime = "audio/mpeg" if audio_format == "mp3" else "audio/wav"
-        completion = await self.client.chat.completions.create(
-            model=MIMO_ASR_MODEL,
-            messages=[{"role": "user", "content": [{"type": "input_audio", "input_audio": {"data": f"data:{mime};base64,{encoded.decode('ascii')}"}}]}],
-            extra_body={"asr_options": {"language": MIMO_ASR_LANGUAGE}},
-        )
+        try:
+            completion = await self.client.chat.completions.create(
+                model=MIMO_ASR_MODEL,
+                messages=[{"role": "user", "content": [{"type": "input_audio", "input_audio": {"data": f"data:{mime};base64,{encoded.decode('ascii')}"}}]}],
+                extra_body={"asr_options": {"language": MIMO_ASR_LANGUAGE}},
+            )
+        except Exception as exc:
+            raise TranscriptError(f"MiMo ASR request failed: {type(exc).__name__}") from exc
         text = completion.choices[0].message.content or ""
         return {"text": text, "segments": [], "language": MIMO_ASR_LANGUAGE, "provider": self.name, "model": MIMO_ASR_MODEL, "audio_hash": audio_hash, "fetched_at": datetime.now(timezone.utc).isoformat(), "source_url": video_url}
 
@@ -134,7 +137,6 @@ def _extract_audio_sync(video_url: str) -> tuple[bytes, str, float]:
             options = {
                 "format": "bestaudio/best", "outtmpl": output, "noplaylist": True,
                 "quiet": True, "no_warnings": True, "cachedir": False,
-                "max_filesize": 8 * 1024 * 1024,
                 "match_filter": lambda info, *, incomplete=False: "video too long" if info.get("duration") and info["duration"] > ASR_MAX_VIDEO_SECONDS else None,
                 "postprocessors": [{"key": "FFmpegExtractAudio", "preferredcodec": "mp3", "preferredquality": "64"}],
             }

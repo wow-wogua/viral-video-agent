@@ -12,6 +12,10 @@ from src.config import MCP_SERVER_URL
 ALLOWED_TOOLS = {"search_videos", "rag_search", "get_transcript", "get_trend_data"}
 
 
+class MCPToolExecutionError(RuntimeError):
+    pass
+
+
 def _parse_text_content(text: str):
     try:
         return json.loads(text)
@@ -21,6 +25,8 @@ def _parse_text_content(text: str):
 
 def _unwrap_mcp_result(result):
     """把 MCP CallToolResult 转为项目内部使用的 list/dict/string。"""
+    if getattr(result, "isError", False) or getattr(result, "is_error", False):
+        raise MCPToolExecutionError("MCP tool execution failed")
     for attr in ("structured_content", "structuredContent"):
         value = getattr(result, attr, None)
         if value is not None:
@@ -71,6 +77,8 @@ async def call_tool_via_mcp(tool_name: str, params: dict):
                 await session.initialize()
                 result = await session.call_tool(tool_name, params)
                 return _unwrap_mcp_result(result)
+    except MCPToolExecutionError:
+        raise
     except Exception as e:
         print(f"[Researcher] MCP调用失败，回退到直接调用: {e}")
         return await call_tool(tool_name, params)

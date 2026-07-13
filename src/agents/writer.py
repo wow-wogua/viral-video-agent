@@ -18,7 +18,7 @@ def _extract_topic(user_request: str) -> str:
 
 async def writer_node(state: AgentState) -> dict:
     trace_tracker.start_agent("writer")
-    llm = get_llm()
+    llm = get_llm("writer")
     analysis = state.get("analysis", {})
     raw_data = state.get("raw_data", [])
     draft = state.get("report_draft", "")

@@ -4,6 +4,7 @@ import unittest
 from src.api.status import result_status
 from src.graph.builder import build_graph
 from src.graph.v2 import (
+    _build_evidence_items,
     evidence_gate_node,
     dedupe_new_data,
     entry_node,
@@ -95,6 +96,15 @@ class GraphV2Tests(unittest.TestCase):
             {"bvid": "BV2", "title": "new"},
         ]
         self.assertEqual(dedupe_new_data(fetched, existing), [fetched[1]])
+
+    def test_transcript_errors_are_not_converted_to_evidence(self):
+        normalized, evidence = _build_evidence_items(
+            "get_transcript",
+            {"video_url": "https://www.bilibili.com/video/BV1xx411c7mD"},
+            ["Error executing tool get_transcript: invalid URL"],
+        )
+        self.assertEqual(normalized, [])
+        self.assertEqual(evidence, [])
 
 
 if __name__ == "__main__":

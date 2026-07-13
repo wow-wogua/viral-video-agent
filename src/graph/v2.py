@@ -173,7 +173,13 @@ def _build_evidence_items(tool_name: str, params: dict, data: list) -> tuple[lis
     source_type = {"search_videos": "bilibili_video", "rag_search": "knowledge_base", "get_transcript": "transcript", "get_trend_data": "trend_data"}.get(tool_name, "tool_result")
     data_field_names = {"bvid", "author", "view", "danmaku", "reply", "favorite", "coin", "share", "like", "duration", "pubdate", "aid"}
     for raw_item in data:
-        item = raw_item if isinstance(raw_item, dict) else {"value": raw_item}
+        if not isinstance(raw_item, dict):
+            continue
+        item = raw_item
+        if tool_name == "get_transcript" and (
+            not item.get("text") or not (item.get("source_url") or item.get("url"))
+        ):
+            continue
         evidence_id = stable_evidence_id(tool_name, item)
         annotated = {**item, "_evidence_id": evidence_id}
         normalized_data.append(annotated)
@@ -258,6 +264,8 @@ async def researcher_v2_node(state: AgentState) -> dict:
             raw_data, evidence = _build_evidence_items(tool_name, normalized_params, unique_data)
             if raw_data:
                 outcome["status"] = "success"
+            elif unique_data:
+                outcome["status"] = "invalid_result"
             elif fetched_data:
                 outcome["status"] = "duplicate_only"
             else:

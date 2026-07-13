@@ -42,6 +42,12 @@ Worker 使用有限重试、指数退避、总超时与 Provider 并发信号量
 | ChromaDB | 知识库向量 |
 | LangGraph Checkpointer | 当前仍为进程内短期图状态；业务恢复以任务与报告表为准 |
 
-## ASR 深度分析
+## 标准分析与 ASR 深度分析
 
-标准分析不调用 ASR。内容深度分析在能力可用时，从本次真实样本中选择最多 5 个公开 B 站视频，Worker 下载临时音频、压缩为 64kbps MP3、调用 MiMo ASR，再重新运行 Analyst 与 Writer。全部转写失败时降级为元数据分析并记录 warning 事件。
+标准分析链路：用户提交 → 排行榜/热门池元数据与标题过滤 → RAG → LangGraph Agent 分析 → Evidence 校验 → PostgreSQL 保存报告。
+
+深度分析链路：用户提交 → Worker 从本次返回样本中排除元数据已明确超过时长上限的视频，再选择最多 `ASR_MAX_VIDEOS` 个唯一的公开 B 站视频 → `yt-dlp` 提取临时音频 → `ffmpeg` 压缩为 64kbps MP3 → MiMo ASR → Transcript Evidence → Analyst/Writer 重新分析 → PostgreSQL 保存 → 临时目录自动删除。
+
+`ASR_MAX_VIDEOS` 默认 5、合法范围 1～5。系统没有独立的全站 Top N 质量重排器，也不要求用户上传音频。全部转写失败时降级为元数据分析并记录 warning，报告不得假装读取过视频内容。
+
+Agent LLM 默认使用 DeepSeek；网关也支持通过 `provider=mimo` 使用余额扣费 Key 和 MiMo 公共 OpenAI 兼容接口。MiMo LLM 与 MiMo ASR 共享凭证时仍走独立客户端，ASR 工具错误或缺少来源的非结构化结果不会进入 Evidence。

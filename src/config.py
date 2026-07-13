@@ -3,23 +3,37 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+
+def _bounded_int(name: str, default: int, minimum: int, maximum: int) -> int:
+    value = int(os.getenv(name, str(default)))
+    if not minimum <= value <= maximum:
+        raise ValueError(f"{name} must be between {minimum} and {maximum}")
+    return value
+
 ANTHROPIC_API_KEY: str = os.getenv("ANTHROPIC_API_KEY", "")
 ANTHROPIC_BASE_URL: str = os.getenv("ANTHROPIC_BASE_URL", "")
 LLM_MODEL_ID: str = os.getenv("LLM_MODEL_ID", "mimo-v2.5-pro")
 
 DEEPSEEK_API_KEY: str = os.getenv("DEEPSEEK_API_KEY", "")
 DEEPSEEK_BASE_URL: str = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com")
-DEEPSEEK_MODEL_ID: str = os.getenv("DEEPSEEK_MODEL_ID", "deepseek-chat")
+DEEPSEEK_MODEL_ID: str = os.getenv("DEEPSEEK_MODEL_ID", "deepseek-v4-pro")
+DEFAULT_LLM_PROVIDER: str = os.getenv("DEFAULT_LLM_PROVIDER", "deepseek").lower()
+if DEFAULT_LLM_PROVIDER not in {"deepseek", "mimo"}:
+    raise ValueError("DEFAULT_LLM_PROVIDER must be deepseek or mimo")
 
 XFYUN_APPID: str = os.getenv("XFYUN_APPID", "")
 XFYUN_SECRET_KEY: str = os.getenv("XFYUN_SECRET_KEY", "")
-MIMO_API_KEY: str = os.getenv("MIMO_API_KEY", "") or ANTHROPIC_API_KEY
+MIMO_API_KEY: str = os.getenv("MIMO_API_KEY", "")
 MIMO_ASR_BASE_URL: str = os.getenv("MIMO_ASR_BASE_URL", "https://api.xiaomimimo.com/v1")
 MIMO_ASR_MODEL: str = os.getenv("MIMO_ASR_MODEL", "mimo-v2.5-asr")
 MIMO_ASR_LANGUAGE: str = os.getenv("MIMO_ASR_LANGUAGE", "zh")
+MIMO_OPENAI_BASE_URL: str = os.getenv("MIMO_OPENAI_BASE_URL", MIMO_ASR_BASE_URL)
+MIMO_CHAT_MODEL_ID: str = os.getenv("MIMO_CHAT_MODEL_ID", LLM_MODEL_ID)
+DEFAULT_LLM_MODEL_ID: str = DEEPSEEK_MODEL_ID if DEFAULT_LLM_PROVIDER == "deepseek" else MIMO_CHAT_MODEL_ID
 TRANSCRIPT_PROVIDER: str = os.getenv("TRANSCRIPT_PROVIDER", "mimo").lower()
 ASR_MAX_BASE64_BYTES: int = int(os.getenv("ASR_MAX_BASE64_BYTES", str(10 * 1024 * 1024)))
 ASR_MAX_VIDEO_SECONDS: int = int(os.getenv("ASR_MAX_VIDEO_SECONDS", "600"))
+ASR_MAX_VIDEOS: int = _bounded_int("ASR_MAX_VIDEOS", 5, 1, 5)
 
 ANALYSIS_CONFIDENCE_THRESHOLD: float = float(os.getenv("ANALYSIS_CONFIDENCE_THRESHOLD", "0.8"))
 ANALYST_MAX_ITERATIONS: int = int(os.getenv("ANALYST_MAX_ITERATIONS", "5"))

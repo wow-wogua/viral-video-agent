@@ -100,6 +100,7 @@ services:
       ENABLE_MOCK_TOOLS: ${ENABLE_MOCK_TOOLS:-false}
       WORKER_MAX_JOBS: ${WORKER_MAX_JOBS:-2}
       JOB_TIMEOUT_SECONDS: ${JOB_TIMEOUT_SECONDS:-600}
+      ASR_MAX_VIDEOS: ${ASR_MAX_VIDEOS:-5}
     depends_on:
       postgres:
         condition: service_healthy

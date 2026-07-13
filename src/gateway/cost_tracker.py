@@ -9,12 +9,13 @@ _cost_context_var: ContextVar[tuple[str, str]] = ContextVar(
 
 class CostTracker:
     # 定价单位：美元/百万 token
-    # MiMo：免费
-    # DeepSeek：官方价 ¥1/¥2 (chat), ¥4/¥16 (reasoner) per 百万 token，按 ¥7.2/$1 换算
+    # MiMo 未在项目内配置估价，0 只表示“本地估价未知”，不代表供应商免费。
+    # DeepSeek V4 使用 2026-07-13 官方美元价；当前未拆分缓存命中 token，
+    # 因此输入统一按 cache miss 价格做保守估算。
     PRICING = {
         "mimo-v2.5-pro":      {"input": 0.0,   "output": 0.0},
-        "deepseek-chat":      {"input": 0.139,  "output": 0.278},
-        "deepseek-reasoner":  {"input": 0.556,  "output": 2.222},
+        "deepseek-v4-flash":  {"input": 0.14,  "output": 0.28},
+        "deepseek-v4-pro":    {"input": 0.435, "output": 0.87},
     }
 
     @staticmethod

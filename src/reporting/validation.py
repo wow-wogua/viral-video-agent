@@ -6,6 +6,8 @@ EVIDENCE_REF_RE = re.compile(r"\b(ev_[a-f0-9]{8,32})\b")
 
 def validate_claims(claims: list[dict], evidence: list[dict]) -> tuple[bool, str]:
     valid_ids = {item["evidence_id"] for item in evidence}
+    if evidence and not claims:
+        return False, "evidence exists but analysis has no structured claims"
     for claim in claims:
         evidence_ids = claim.get("evidence_ids", [])
         if any(item not in valid_ids for item in evidence_ids):

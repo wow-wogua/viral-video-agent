@@ -22,8 +22,8 @@ async def search_videos_tool(keyword: str, platforms: list[str], limit: int = 10
 
 
 @mcp.tool(name="get_transcript")
-async def get_transcript_tool(video_url: str) -> str | None:
-    """获取视频转写文本。"""
+async def get_transcript_tool(video_url: str) -> dict | None:
+    """获取结构化视频转写结果。"""
     return await get_transcript(video_url)
 
 
