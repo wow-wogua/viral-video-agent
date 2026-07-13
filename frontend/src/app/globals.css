@@ -4,48 +4,48 @@
 
 @layer base {
   :root {
-    --background: 280 40% 90%;
-    --foreground: 150 20% 28%;
-    --card: 280 25% 95%;
-    --card-foreground: 150 20% 28%;
-    --popover: 280 25% 95%;
-    --popover-foreground: 150 20% 28%;
-    --primary: 280 45% 45%;
+    --background: 220 33% 98%;
+    --foreground: 222 47% 11%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+    --primary: 243 75% 59%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 280 30% 85%;
-    --secondary-foreground: 150 20% 28%;
-    --muted: 280 25% 85%;
-    --muted-foreground: 150 15% 40%;
-    --accent: 280 30% 82%;
-    --accent-foreground: 150 20% 28%;
+    --secondary: 220 14% 96%;
+    --secondary-foreground: 222 47% 11%;
+    --muted: 220 14% 96%;
+    --muted-foreground: 215 16% 47%;
+    --accent: 220 14% 96%;
+    --accent-foreground: 222 47% 11%;
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 0 0% 98%;
-    --border: 280 25% 78%;
-    --input: 280 25% 78%;
-    --ring: 280 45% 45%;
-    --radius: 1rem;
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: 243 75% 59%;
+    --radius: .75rem;
   }
 
   .dark {
-    --background: 220 40% 14%;
-    --foreground: 28 100% 60%;
-    --card: 220 35% 20%;
-    --card-foreground: 28 100% 60%;
-    --popover: 220 35% 20%;
-    --popover-foreground: 28 100% 60%;
-    --primary: 28 100% 60%;
-    --primary-foreground: 220 40% 10%;
-    --secondary: 220 35% 24%;
-    --secondary-foreground: 28 100% 60%;
-    --muted: 220 35% 24%;
-    --muted-foreground: 28 60% 50%;
-    --accent: 220 35% 27%;
-    --accent-foreground: 28 100% 60%;
+    --background: 222 47% 8%;
+    --foreground: 210 40% 98%;
+    --card: 222 40% 11%;
+    --card-foreground: 210 40% 98%;
+    --popover: 222 40% 11%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 243 75% 65%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 217 33% 17%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 217 33% 17%;
+    --muted-foreground: 215 20% 65%;
+    --accent: 217 33% 17%;
+    --accent-foreground: 210 40% 98%;
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 0 0% 98%;
-    --border: 220 30% 30%;
-    --input: 220 30% 30%;
-    --ring: 28 100% 60%;
+    --border: 217 33% 20%;
+    --input: 217 33% 20%;
+    --ring: 243 75% 65%;
   }
 }
 
@@ -59,16 +59,8 @@
 }
 
 @layer components {
-  .card-3d {
-    @apply shadow-[0_4px_20px_rgba(0,0,0,0.15),0_2px_8px_rgba(0,0,0,0.1)] transition-shadow;
-  }
-  .card-3d:hover {
-    @apply shadow-[0_8px_30px_rgba(0,0,0,0.2),0_4px_12px_rgba(0,0,0,0.15)];
-  }
-  .dark .card-3d {
-    box-shadow: 0 4px 20px rgba(255,127,0,0.15), 0 2px 8px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.05);
-  }
-  .dark .card-3d:hover {
-    box-shadow: 0 8px 30px rgba(255,127,0,0.25), 0 4px 12px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.08);
-  }
+  .card-3d { @apply border bg-card shadow-sm transition-shadow; }
+  .card-3d:hover { @apply shadow-md; }
+  .report-prose table { @apply block max-w-full overflow-x-auto; }
+  .report-prose a { @apply break-all text-indigo-600 dark:text-indigo-300; }
 }

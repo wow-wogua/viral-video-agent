@@ -1,173 +1,20 @@
-'use client';
-
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { Sparkles, ArrowRight, Zap, Utensils, Smartphone, Clock, ChevronRight } from 'lucide-react';
-import { cn } from '@/lib/utils';
-import { useAnalyzeStore } from '@/stores/analyzeStore';
-import { analyzeStream } from '@/lib/api';
-
-const platforms = [
-  { id: 'bilibili', label: 'Bilibili', available: true },
-  { id: 'douyin', label: '抖音', available: false },
-];
+import Link from 'next/link';
+import { ArrowRight, BarChart3, CheckCircle2, FileSearch, Link2, SearchCheck, ShieldCheck, Target } from 'lucide-react';
+import { Button, Card } from '@/components/ui';
 
 const templates = [
-  { label: '热门视频特征分析', query: '分析B站当前热门视频的内容特征和爆款规律', icon: Zap },
-  { label: '选题方向分析', query: '分析B站热门视频的选题方向和时长分布', icon: Utensils },
-  { label: '爆款规律提炼', query: '分析B站热门排行榜视频，提炼可复用的创作方法论', icon: Smartphone },
+  ['B站赛道爆款分析', '找到代表样本，归纳内容形态与竞争结构。', BarChart3],
+  ['竞品账号内容拆解', '围绕指定账号或竞品需求提取可复用策略。', Target],
+  ['热门标题结构分析', '对标题钩子、信息密度与承诺方式做证据化拆解。', SearchCheck],
+  ['选题方向分析', '从真实样本与知识库中筛选值得验证的方向。', FileSearch],
+  ['内容脚本深度分析', '在转写能力可用时分析开头、口播与脚本结构。', Link2],
 ];
 
 export default function HomePage() {
-  const router = useRouter();
-  const [query, setQuery] = useState('');
-  const [platform, setPlatform] = useState('bilibili');
-  const [loading, setLoading] = useState(false);
-  const { records, startAnalysis, completeAnalysis, updateCost, updateAgent } = useAnalyzeStore();
-
-
-  const AGENT_ORDER = ['supervisor', 'planner', 'researcher', 'analyst', 'writer'];
-
-  const handleAnalyze = () => {
-    if (!query.trim()) return;
-    setLoading(true);
-    const sessionId = crypto.randomUUID();
-    startAnalysis(query, [platform], sessionId);
-
-    let reportContent = '';
-    let reportPlan: string[] = [];
-    let completedAgents = new Set<string>();
-
-    analyzeStream(
-      query,
-      [platform],
-      sessionId,
-      (event) => {
-        // 处理 Agent 进度事件
-        if (AGENT_ORDER.includes(event.agent)) {
-          completedAgents.add(event.agent);
-          updateAgent(event.agent, { status: 'completed', message: '完成' });
-          // 标记下一个 Agent 为 running
-          const nextIdx = AGENT_ORDER.indexOf(event.agent) + 1;
-          if (nextIdx < AGENT_ORDER.length) {
-            const nextAgent = AGENT_ORDER[nextIdx];
-            if (!completedAgents.has(nextAgent)) {
-              updateAgent(nextAgent, { status: 'running', message: '执行中...' });
-            }
-          }
-        }
-        if (event.agent === 'report') {
-          reportContent = event.report || '';
-          reportPlan = event.plan || [];
-        }
-        if (event.agent === 'cost' && event.input_tokens !== undefined) {
-          updateCost(
-            {
-              input_tokens: event.input_tokens,
-              output_tokens: event.output_tokens ?? 0,
-              total_cost: event.total_cost ?? 0,
-            },
-            event.trace,
-            event.fallback,
-            event.prompt_version,
-          );
-        }
-        if (event.agent === 'done') {
-          completeAnalysis(reportContent || '报告生成失败', reportPlan);
-          router.push(`/report/${event.session_id || sessionId}`);
-          setLoading(false);
-        }
-      },
-      (err) => {
-        console.error('SSE error:', err);
-        completeAnalysis('分析失败，请重试', []);
-        setLoading(false);
-      },
-    );
-  };
-
-  return (
-    <div className="mx-auto max-w-5xl px-8 pt-20 pb-24">
-      <div className="mb-12 text-center">
-        <h1 className="text-4xl font-bold tracking-tight">爆款视频分析</h1>
-        <p className="mt-3 text-lg text-muted-foreground">输入分析需求，AI 自动分析并生成策略报告</p>
-      </div>
-
-      <div className="card-3d rounded-3xl border bg-card p-7">
-        <textarea
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="例如：分析B站当前热门视频的内容特征和爆款规律"
-          className="min-h-[110px] w-full resize-none border-0 bg-transparent text-base outline-none placeholder:text-muted-foreground/50"
-        />
-        <div className="mt-4 flex items-center justify-between border-t pt-4">
-          <div className="flex items-center gap-3">
-            {platforms.map((p) => (
-              <button
-                key={p.id}
-                onClick={() => p.available && setPlatform(p.id)}
-                disabled={!p.available}
-                className={cn(
-                  'card-3d rounded-2xl px-4 py-1.5 text-sm font-medium transition-colors',
-                  platform === p.id
-                    ? 'bg-primary/20 text-primary-foreground'
-                    : p.available
-                    ? 'bg-card text-muted-foreground hover:bg-accent'
-                    : 'cursor-not-allowed bg-card text-muted-foreground/40'
-                )}
-              >
-                {p.label}
-                {!p.available && ' (待实现)'}
-              </button>
-            ))}
-          </div>
-          <button
-            onClick={handleAnalyze}
-            disabled={!query.trim() || loading}
-            className="card-3d flex items-center gap-2 rounded-2xl bg-primary px-6 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:opacity-90 disabled:opacity-50"
-          >
-            <Sparkles className="h-4 w-4" />
-            {loading ? '分析中...' : '开始分析'}
-          </button>
-        </div>
-      </div>
-
-      <div className="mt-8 grid grid-cols-3 gap-4">
-        {templates.map((t) => {
-          const Icon = t.icon;
-          return (
-            <button
-              key={t.label}
-              onClick={() => setQuery(t.query)}
-              className="card-3d flex items-start gap-3 rounded-3xl border p-5 text-left transition-colors hover:bg-accent"
-            >
-              <Icon className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
-              <span className="text-sm font-medium">{t.label}</span>
-            </button>
-          );
-        })}
-      </div>
-
-      {records.length > 0 && (
-        <div className="mt-12">
-          <h2 className="mb-4 text-sm font-semibold text-muted-foreground">最近分析</h2>
-          <div className="card-3d space-y-2 rounded-3xl border bg-card p-4">
-            {records.slice(0, 5).map((r) => (
-              <button
-                key={r.id}
-                onClick={() => router.push(`/report/${r.id}`)}
-                className="flex w-full items-center justify-between rounded-2xl px-5 py-3 text-left transition-colors hover:bg-accent"
-              >
-                <div className="flex items-center gap-4">
-                  <span className="text-sm text-muted-foreground">{r.date}</span>
-                  <span className="text-base">{r.title}</span>
-                </div>
-                <ChevronRight className="h-4 w-4 text-muted-foreground" />
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  );
+  return <>
+    <section className="relative overflow-hidden border-b"><div className="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_20%_20%,rgba(79,70,229,.14),transparent_32%),radial-gradient(circle_at_80%_10%,rgba(6,182,212,.12),transparent_28%)]"/><div className="mx-auto grid max-w-7xl gap-12 px-4 py-20 sm:px-6 lg:grid-cols-[1.1fr_.9fr] lg:px-8 lg:py-28"><div><div className="mb-5 inline-flex items-center gap-2 rounded-full border bg-card px-3 py-1.5 text-sm text-muted-foreground"><ShieldCheck className="h-4 w-4 text-emerald-500"/>当前仅支持 B 站公开样本</div><h1 className="max-w-3xl text-4xl font-bold tracking-tight sm:text-5xl lg:text-6xl">用真实B站样本生成<br/><span className="text-indigo-600 dark:text-indigo-400">可验证的内容分析报告</span></h1><p className="mt-6 max-w-2xl text-lg leading-8 text-muted-foreground">输入赛道、选题或竞品需求，获得带来源链接、结构化结论和可执行建议的报告。每条关键观察都能回到 Evidence。</p><div className="mt-8 flex flex-wrap gap-3"><Link href="/register"><Button size="lg">开始免费测试<ArrowRight className="h-4 w-4"/></Button></Link><Link href="/examples"><Button size="lg" variant="secondary">查看示例报告</Button></Link></div></div><Card className="self-center p-5 sm:p-7"><div className="mb-5 flex items-center justify-between"><div><p className="text-sm text-muted-foreground">分析需求</p><p className="mt-1 font-semibold">AI 编程赛道的爆款选题与标题结构</p></div><span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 dark:bg-emerald-950 dark:text-emerald-200">Evidence 通过</span></div>{['采集 8 条真实 B 站视频样本','检索 5 条知识库依据','验证 12 条结构化结论','生成策略报告与数据附录'].map((item, index) => <div key={item} className="flex items-center gap-3 border-t py-3 text-sm"><CheckCircle2 className="h-4 w-4 text-emerald-500"/><span className="flex-1">{item}</span><span className="font-mono text-xs text-muted-foreground">0{index+1}</span></div>)}<div className="mt-3 rounded-xl bg-muted p-4 text-sm leading-6"><strong>结论示例：</strong>高播放样本常用“结果前置 + 明确受众”的标题结构。<a href="#evidence" className="ml-2 font-mono text-indigo-600 dark:text-indigo-300">[ev_bili_01]</a></div></Card></div></section>
+    <section id="templates" className="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8"><div className="max-w-2xl"><p className="text-sm font-semibold text-indigo-600 dark:text-indigo-300">分析模板</p><h2 className="mt-2 text-3xl font-bold">从真实问题开始，不从 Agent 炫技开始</h2><p className="mt-3 text-muted-foreground">选择模板后仍可自由编辑需求。产品不会展示尚未接入的其他平台入口。</p></div><div className="mt-9 grid gap-4 md:grid-cols-2 lg:grid-cols-3">{templates.map(([title, description, Icon]) => <Card key={title as string} className="p-5"><Icon className="h-6 w-6 text-indigo-500"/><h3 className="mt-4 font-semibold">{title as string}</h3><p className="mt-2 text-sm leading-6 text-muted-foreground">{description as string}</p></Card>)}</div></section>
+    <section id="evidence" className="border-y bg-card"><div className="mx-auto grid max-w-7xl gap-10 px-4 py-20 sm:px-6 lg:grid-cols-2 lg:px-8"><div><p className="text-sm font-semibold text-cyan-600 dark:text-cyan-300">Evidence 可信度</p><h2 className="mt-2 text-3xl font-bold">报告里的数字和来源一一对应</h2><p className="mt-4 leading-7 text-muted-foreground">系统保存真实 URL、抓取时间、BVID、作者和可用数据字段。Observation、Inference 与 Recommendation 分开展示，证据不足时明确降级为部分结果。</p></div><div className="grid gap-4 sm:grid-cols-2">{[['稳定引用','每条证据获得可校验的 evidence_id。'],['结论门禁','不存在的引用会使报告验证失败。'],['来源可回看','点击引用即可打开 Evidence 卡片与真实来源。'],['边界透明','不会把单个视频外推为整个行业规律。']].map(([title, description]) => <div key={title} className="rounded-2xl border bg-background p-4"><h3 className="font-medium">{title}</h3><p className="mt-2 text-sm leading-6 text-muted-foreground">{description}</p></div>)}</div></div></section>
+    <section className="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8"><Card className="flex flex-col items-start justify-between gap-6 bg-slate-950 p-8 text-white dark:bg-indigo-950 sm:flex-row sm:items-center"><div><h2 className="text-2xl font-bold">准备好测试一个真实需求了吗？</h2><p className="mt-2 text-slate-300">小规模公开测试期间，所有分析都限定在 B 站。</p></div><Link href="/register"><Button className="bg-white text-slate-950 hover:bg-slate-100">创建账号<ArrowRight className="h-4 w-4"/></Button></Link></Card></section>
+  </>;
 }

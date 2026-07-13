@@ -1,5 +1,13 @@
 # Environment variables (contains API keys)
 .env
+backups/*
+!backups/.gitkeep
+.venv/
+frontend/.next/
+frontend/node_modules/
+tmp/
+*.mp3
+*.wav
 
 # Python
 __pycache__/

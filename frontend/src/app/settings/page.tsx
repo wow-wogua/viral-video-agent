@@ -1,0 +1,9 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import { AppShell } from '@/components/AppShell';
+import { UsageCard } from '@/components/product';
+import { Button, Card, ErrorState, LoadingState } from '@/components/ui';
+import { getCurrentUser, getUsage, logout, readableError, type User, type UsageSummary } from '@/lib/api';
+
+export default function SettingsPage() { const [user, setUser] = useState<User | null>(null); const [usage, setUsage] = useState<UsageSummary | null>(null); const [error, setError] = useState(''); useEffect(() => { Promise.all([getCurrentUser(), getUsage()]).then(([u, value]) => { setUser(u); setUsage(value); }).catch((err) => setError(readableError(err))); }, []); const signOut = async () => { await logout(); window.location.href = '/'; }; return <AppShell><div className="mb-7"><p className="text-sm text-muted-foreground">用户设置</p><h1 className="mt-1 text-2xl font-bold">账号与用量</h1></div>{error ? <ErrorState description={error}/> : !user || !usage ? <LoadingState/> : <div className="grid gap-6 lg:grid-cols-2"><Card className="p-6"><h2 className="font-semibold">账号</h2><dl className="mt-5 space-y-4 text-sm"><div><dt className="text-muted-foreground">邮箱</dt><dd className="mt-1 font-medium">{user.email}</dd></div><div><dt className="text-muted-foreground">注册时间</dt><dd className="mt-1">{new Date(user.created_at).toLocaleString('zh-CN')}</dd></div><div><dt className="text-muted-foreground">状态</dt><dd className="mt-1 text-emerald-600">正常</dd></div></dl><Button className="mt-7" variant="secondary" onClick={signOut}>退出登录</Button></Card><div className="space-y-4"><UsageCard usage={usage}/><Card className="p-6"><h2 className="font-semibold">数据与隐私</h2><p className="mt-2 text-sm leading-6 text-muted-foreground">公开分享仅包含报告正文、结构化结论与 Evidence。用户信息、API Key、成本和内部执行轨迹不会进入分享页。</p></Card></div></div>}</AppShell>; }

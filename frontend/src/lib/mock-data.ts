@@ -30,7 +30,7 @@ export interface AnalysisRecord {
   title: string;
   platform: string;
   date: string;
-  status: 'completed' | 'running' | 'error';
+  status: 'completed' | 'running' | 'partial' | 'failed' | 'cancelled';
   plan: string[];
   report: string;
   cost?: CostInfo;

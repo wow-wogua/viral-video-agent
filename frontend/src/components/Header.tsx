@@ -2,58 +2,22 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Sparkles, FileText, History, Sun, Moon } from 'lucide-react';
+import { Sun, Moon } from 'lucide-react';
 import { useTheme } from 'next-themes';
-import { cn } from '@/lib/utils';
+import { Logo } from '@/components/Logo';
+import { Button } from '@/components/ui';
 
-const navItems = [
-  { href: '/', label: '分析', icon: Sparkles },
-  { href: '/history', label: '历史', icon: History },
-];
+export function HeaderActions() {
+  const { resolvedTheme, setTheme } = useTheme();
+  return <div className="flex items-center gap-2"><button onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')} className="relative grid h-9 w-9 place-items-center rounded-xl text-muted-foreground hover:bg-muted" aria-label="切换主题"><Sun className="h-4 w-4 scale-100 dark:scale-0"/><Moon className="absolute h-4 w-4 scale-0 dark:scale-100"/></button><Link href="/login" className="hidden text-sm font-medium text-muted-foreground hover:text-foreground sm:block">登录</Link><Button size="sm" onClick={() => { window.location.href = '/register'; }}>免费试用</Button></div>;
+}
 
 export function Header() {
   const pathname = usePathname();
-  const { theme, setTheme } = useTheme();
-
+  if (['/dashboard', '/jobs', '/reports', '/report', '/history', '/settings'].some((prefix) => pathname.startsWith(prefix))) return null;
   return (
-    <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="mx-auto flex h-14 max-w-5xl items-center justify-between px-8">
-        <div className="flex items-center gap-8">
-          <Link href="/" className="flex items-center gap-2">
-            <Sparkles className="h-5 w-5 text-primary" />
-            <span className="text-lg font-bold">爆款视频分析</span>
-          </Link>
-          <nav className="flex items-center gap-2">
-            {navItems.map((item) => {
-              const Icon = item.icon;
-              const isActive = pathname === item.href;
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={cn(
-                    'flex items-center gap-2 rounded-2xl px-4 py-2 text-sm font-medium transition-colors',
-                    isActive
-                      ? 'bg-primary/20 text-primary-foreground'
-                      : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
-                  )}
-                >
-                  <Icon className="h-4 w-4" />
-                  {item.label}
-                </Link>
-              );
-            })}
-          </nav>
-        </div>
-        <button
-          onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-          className="rounded-2xl p-2 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
-        >
-          <Sun className="h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
-          <Moon className="absolute h-4 w-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
-          <span className="sr-only">切换主题</span>
-        </button>
-      </div>
+    <header className="sticky top-0 z-40 border-b bg-background/90 backdrop-blur">
+      <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8"><Logo/><nav className="hidden items-center gap-6 text-sm text-muted-foreground md:flex"><Link href="/#templates" className="hover:text-foreground">分析模板</Link><Link href="/#evidence" className="hover:text-foreground">Evidence 机制</Link><Link href="/examples" className="hover:text-foreground">示例报告</Link></nav><HeaderActions/></div>
     </header>
   );
 }
