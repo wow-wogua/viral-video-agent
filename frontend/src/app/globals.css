@@ -64,3 +64,10 @@
   .report-prose table { @apply block max-w-full overflow-x-auto; }
   .report-prose a { @apply break-all text-indigo-600 dark:text-indigo-300; }
 }
+
+@media print {
+  aside, header, nav { display: none !important; }
+  main { padding: 0 !important; }
+  body { background: white !important; color: black !important; }
+  .report-prose { font-size: 11pt; }
+}

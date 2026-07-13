@@ -9,6 +9,7 @@ export interface EvidenceItem { evidence_id: string; tool: string; source_type: 
 export interface Report { id: string; job_id: string; title: string; content: string; structured_claims: Claim[]; status: JobStatus; model_info: Record<string, unknown>; evidence: EvidenceItem[]; usage?: UsageRecord | null; created_at: string; updated_at: string; }
 export interface UsageRecord { input_tokens: number; output_tokens: number; estimated_cost: number; asr_seconds: number; }
 export interface UsageSummary { jobs_used: number; jobs_limit: number; input_tokens: number; output_tokens: number; estimated_cost: number; asr_seconds: number; }
+export interface Capability { name: string; enabled: boolean; availability: string; supported_platforms: string[]; }
 export interface ApiErrorShape { error_code: string; message: string; }
 
 export class ApiError extends Error { constructor(public status: number, public code: string, message: string) { super(message); } }
@@ -33,6 +34,7 @@ export const getJobEvents = (id: string) => request<{ items: JobEvent[] }>(`/job
 export const getReport = (id: string) => request<Report>(`/reports/${id}`);
 export const deleteJob = (id: string) => request<void>(`/jobs/${id}`, { method: 'DELETE' });
 export const getUsage = () => request<UsageSummary>('/usage');
+export const getCapabilities = () => request<{ items: Capability[]; platforms: string[] }>('/capabilities');
 export const createShareLink = (reportId: string, expiresInDays: number) => request<{ token: string; expires_at: string }>(`/reports/${reportId}/shares`, { method: 'POST', body: JSON.stringify({ expires_in_days: expiresInDays }) });
 export const getSharedReport = (token: string) => request<Report>(`/shares/${token}`);
 export const createFeedback = (reportId: string, data: { rating: number; useful: boolean; reason: string; comment: string; adopted: boolean | null }) => request<void>(`/reports/${reportId}/feedback`, { method: 'POST', body: JSON.stringify(data) });

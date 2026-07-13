@@ -5,6 +5,7 @@ backups/*
 .venv/
 frontend/.next/
 frontend/node_modules/
+.playwright-cli/
 tmp/
 *.mp3
 *.wav

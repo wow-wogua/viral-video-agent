@@ -58,7 +58,7 @@ def requires_analysis_workflow(user_request: str) -> bool:
         "抖音", "快手", "小红书", "短视频",
     )
     action_terms = (
-        "分析", "搜索", "查找", "检索", "对比", "复盘", "报告", "规律", "样本",
+        "分析", "搜索", "查找", "检索", "对比", "复盘", "拆解", "提炼", "报告", "规律", "样本",
     )
     return any(term in normalized for term in domain_terms) and any(
         term in normalized for term in action_terms

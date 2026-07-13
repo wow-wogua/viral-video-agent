@@ -13,8 +13,14 @@ from src.config import USER_MONTHLY_JOB_LIMIT
 from src.db.models import Report, User
 from src.db.session import get_db
 from src.repositories import ReportRepository
+from src.tools.capabilities import capability_snapshot
 
 router = APIRouter(tags=["reports"])
+
+
+@router.get("/capabilities", response_model=dict)
+async def capabilities():
+    return {"items": capability_snapshot(), "platforms": ["bilibili"]}
 
 
 def serialize_report(report: Report, usage=None, public: bool = False) -> ReportRead:

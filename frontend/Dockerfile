@@ -1,5 +1,7 @@
 FROM node:20-alpine AS builder
 WORKDIR /app
+ARG BACKEND_URL=http://app:8000
+ENV BACKEND_URL=${BACKEND_URL}
 # npm 使用淘宝镜像
 RUN npm config set registry https://registry.npmmirror.com
 COPY package*.json ./

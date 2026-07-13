@@ -1,135 +1,187 @@
-# 爆款视频分析多智能体系统
+# 爆款视频分析
 
-基于 LangGraph 的短视频分析 Agent 系统，自动收集可用证据、分析爆款内容并生成策略报告。当前默认使用 v2 确定性主流程，保留 v1 Supervisor 回环用于 A/B 和回退。
+面向小规模公开测试的 B 站单平台内容分析产品：输入赛道、选题或竞品需求，生成带真实视频样本、来源链接、结构化结论和可执行建议的报告。
+
+> 当前真实视频搜索仅支持 B 站。项目不会宣称支持抖音、快手或小红书实时分析。
+
+## 产品截图
+
+![产品首页](output/playwright/home-desktop.png)
+
+<details>
+<summary>移动端首页与用户 Dashboard</summary>
+
+![移动端首页](output/playwright/home-mobile.png)
+
+![用户 Dashboard](output/playwright/dashboard-desktop.png)
+</details>
+
+## 产品能力
+
+- 注册、登录、退出与 HttpOnly Cookie 会话；密码使用 Argon2 哈希
+- PostgreSQL 长期保存用户、任务、报告、Evidence、反馈、用量和分享链接
+- Arq + Redis 执行 2–5 分钟后台分析任务，支持幂等、取消、有限重试、超时和轮询进度
+- LangGraph v2 保持默认主链路：Entry → Planner → Research Loop → Evidence Gate → Analyst → Writer
+- v1 Supervisor 回环保留为 A/B 与回退，不作为产品默认流程
+- 每条 Evidence 获得稳定 `evidence_id`；Observation 必须引用真实 Evidence
+- 报告数据附录由程序确定性生成，不完全交给 LLM
+- 高熵只读分享链接支持过期与撤销；公开页不暴露用户、成本和内部执行轨迹
+- Markdown 导出、浏览器打印/PDF、反馈与用量记录
+- MiMo ASR 内容深度分析：独立 OpenAI 兼容客户端，讯飞保留为可选回退
+- 桌面、平板、手机与深浅主题响应式界面
 
 ## 架构
 
 ```text
-v2（默认）: 用户输入 → 确定性入口 → Planner → Research Loop → Evidence Gate → Analyst → Writer
-v1（回退）: 用户输入 → Supervisor → Planner/Researcher/Analyst/Writer → Supervisor → 报告
+Next.js UI
+  │ HttpOnly Cookie / polling
+  ▼
+FastAPI ─────────────── PostgreSQL 16
+  │ create/enqueue        users/jobs/reports/evidence/feedback/usage/shares
+  ▼
+Arq + Redis
+  │ queue/status/events/cache/locks
+  ▼
+Worker → LangGraph v2 → MCP tools → Bilibili / ChromaDB / optional ASR
 ```
 
-**核心设计：**
-- v2 用规则完成意图与平台能力预检，正常流转不再让 Supervisor 每步调用 LLM；v1 仍可通过 `GRAPH_VERSION=v1` 启用
-- 动态能力注册只暴露当前真实可用的工具/平台；抖音、快手、小红书实时搜索未接入时直接返回 `unsupported_platform`
-- Researcher 在可用工具与 `none` 间选择，通过 MCP 调用并保留直接函数兜底；Pydantic 统一参数校验，搜索结果去重且单次最多 20 条
-- 结构化工具结果记录 `success/empty/unavailable/error`，Evidence Gate 在无真实证据时返回 `partial`，不继续生成正常报告
-- v2 Analyst 最多 2 轮、Writer 生成 1 次；v1 保留原自评与修订回环用于对照
-- 请求携带稳定 `user_id`，长期记忆与 Redis 历史列表按用户隔离；Redis 只保存缓存、历史记录和 running/completed/partial/failed 状态，当前未接入 Celery
-- CostTracker / TraceTracker / FallbackCounter 使用请求上下文隔离，避免并发请求串统计
-- RAG 使用标题感知切分、稳定 chunk ID、文档/片段去重、向量候选 + 中文词项混合排序；返回章节、来源 URL 和来源等级
-- `get_trend_data` 默认在真实数据源未配置时返回 `unavailable`；随机 mock 只在 `ENABLE_MOCK_TOOLS=true` 的显式演示模式启用
+Compose 包含 8 个服务：`frontend`、`app`、`worker`、`postgres`、`redis`、`chromadb`、`mcp-server`、`nginx`。PostgreSQL、Redis 和 ChromaDB 均使用 Docker 命名卷，不把数据库内部文件写入仓库。
 
-## 演示
+详细说明：
 
-### 首页
-![首页](pictures/home.png)
-
-### 分析中
-![分析中](pictures/analysing.png)
-
-### 报告页面
-![报告页面](pictures/report.png)
-
-### 历史记录
-![历史记录](pictures/history.png)
-
-### 执行轨迹
-![执行轨迹1](pictures/trace1.png)
-![执行轨迹2](pictures/trace2.png)
-
-## 技术栈
-
-| 组件 | 技术 |
-|------|------|
-| 编排框架 | LangGraph |
-| LLM | MiMo / DeepSeek / 微调模型（Qwen3-4B LoRA） |
-| 工具协议 | MCP (SSE) |
-| 向量数据库 | ChromaDB |
-| 后端 | FastAPI |
-| 前端 | Next.js + Tailwind + Zustand |
-| 缓存与状态 | Redis（缓存 / 历史记录 / 状态查询；无 Celery worker） |
-| 反向代理 | Nginx |
-| 容器化 | Docker Compose (6 服务) |
+- [产品架构与任务流](docs/product-mvp.md)
+- [权限、数据与 Evidence 边界](docs/security-and-data.md)
+- [2026-07-13 验收记录](docs/validation-20260713.md)
 
 ## 快速开始
 
 ```powershell
-# 1. 克隆项目
 git clone https://github.com/wow-wogua/viral-video-agent.git
 cd viral-video-agent
+Copy-Item .env.example .env
 
-# 2. 配置环境变量
-cp .env.example .env
-# 编辑 .env，填入你的 API Key
+# 编辑 .env：至少配置通用 LLM Key、POSTGRES_PASSWORD 和 JWT_SECRET
+docker compose up -d --build
 
-# 3. 启动服务
-docker compose up -d
-
-# 4. 访问
-# 前端页面：http://localhost
-# 后端 API：http://localhost:8000
-# MCP Server：http://localhost:8001
+# 查看状态
+docker compose ps
+docker compose logs -f app worker
 ```
 
-### 使用微调模型（可选）
+访问：
 
-Researcher Agent 可以将 LoRA 微调后的 Qwen3-4B 作为 MiMo API 的本地 A/B 路径。内置 50 条工具调用评测中准确率从 88% 提升至 94%、完全准确率从 54% 提升至 80%；但当前以 `base + direct adapter` 为主口径的 hard44/holdout20 公平实验没有形成稳定基座优势，因此默认链路仍使用 API 模型，不把微调模型描述为生产替代。
+- 产品：<http://localhost:3000>
+- API 文档：<http://localhost:8000/docs>
+- 经 Nginx：<http://localhost>
 
-```bash
-# 终端1：启动微调模型 API（需要先训练，见 tool-calling-finetune 项目）
-cd D:\internship\tool-calling-finetune
-python scripts\serve_model.py
+数据库迁移由 `app` 启动命令自动执行，也可以手动运行：
 
-# 终端2：启动项目2，启用微调模型
-cd D:\internship\viral-video-agent
-$env:USE_FINETUNED_MODEL="true"
-$env:FINETUNED_MODEL_URL="http://host.docker.internal:8002/v1"
-docker compose up -d
+```powershell
+docker compose run --rm app alembic upgrade head
 ```
 
-只有 Researcher 使用微调模型，其他 Agent（Supervisor/Planner/Analyst/Writer）仍用 MiMo API。同一 hard44/holdout20 和相同生成参数下，direct adapter 在默认 Prompt 上低于基座；rules Prompt 只改善部分完全准确率，Safe 指标和最稳基座配置仍无稳定优势。旧 4-bit merged 产物与基座完全相同属于导出路径风险，已不再作为微调效果依据；本地服务现在默认直接加载 4-bit 基座 + adapter。
+## 环境变量
 
-**关闭：**
-- 终端1：Ctrl+C
-- 终端2：`docker compose down`
+生产环境必须更换：
 
-## 评测数据与口径
-
-`bfcl_eval.py` 是 **BFCL 风格自建工具选择评测**，不是官方 BFCL 榜单；`tau_bench.py` 是 **tau-bench-inspired 端到端冒烟检查**，不是官方 tau-bench。新结果与历史结果分开保留，不能把新评分规则追溯到旧数据。
-
-| 指标 | 历史结果 / 当前边界 |
-|------|------|
-| 多 Agent vs 单 Agent | 3 条不同任务各单次运行，综合均值 +0.53；其中 simple +1.2、medium -0.2，不能概括成“复杂任务普遍提升” |
-| LLM-as-Judge 评测框架 | 5 维度打分；当前支持温度 0、默认重复 3 次取均值，旧对比结果仍是单次历史试验 |
-| BFCL 风格工具选择 | 2026-07-11 旧全工具集35条：工具名30/35、已标注参数14/31、完全14/35；暴露 `none` 过度调用与参数文案不稳定，未通过改旧题 Prompt 追分 |
-| v2 能力范围路由 | 冻结 dev 21/23（91.3%）；独立 holdout 13/13。只评当前可用能力，不等同官方 BFCL 或开放域泛化 |
-| 微调模型工具准确率 | 内置50条历史为88%→94%；direct adapter在默认Prompt下低于基座，rules Prompt仅部分指标改善且Safe无稳定优势；旧4-bit merged结果仅作导出风险诊断 |
-| tau-bench-inspired 冒烟检查 | 2026-07-11 当前严格18条为13/18（72.2%）：simple 3/3、medium 3/3、complex 5/5、edge 2/7；5条边界失败均为安全短路后缺少 `plan`，通过用例平均161.8秒。历史18/18只作旧规则记录 |
-| RAG 来源 Recall@5 | 40 篇、235 个标题感知 chunk；2026-07-12 固定集28/28命中，来源审计通过。这是自建固定集，不代表开放域泛化 |
-| v1/v2 架构 A/B | B站科技：164.8s→79.4s、LLM 16→7；B站美食+RAG：179.6s→119.4s、LLM 14→6。两组均 completed，报告长度同量级；仍需扩大任务集评估质量 |
-| Redis 用户隔离 | 已验证 owner 可见、其他 `user_id` 返回 not_found，用户历史列表互不混合；这是客户端稳定ID隔离，不等同于登录鉴权 |
-| FallbackCounter | 历史 JSON 82%、正则 18%，当前请求隔离实现更新后待重跑 |
-
-## 项目结构
-
+```dotenv
+APP_ENV=production
+POSTGRES_PASSWORD=replace-with-a-strong-password
+JWT_SECRET=replace-with-at-least-32-random-bytes
 ```
-viral-video-agent/
-├── src/
-│   ├── agents/          # 5 个 Agent（supervisor/planner/researcher/analyst/writer）
-│   ├── graph/           # LangGraph StateGraph 编排
-│   ├── tools/           # MCP 工具（B站搜索/RAG检索/语音转写/趋势数据）
-│   ├── gateway/         # LLM 网关（多 Provider + 成本追踪）
-│   ├── prompts/         # Prompt 配置化（prompts.yaml + PromptManager）
-│   ├── eval/            # 自建评测（BFCL风格/tau-inspired/LLM-as-Judge）
-│   ├── utils/           # FallbackCounter + TraceTracker
-│   ├── memory/          # 长期记忆（ChromaDB）
-│   ├── rag/             # RAG 检索
-│   ├── mcp/             # MCP Client
-│   └── api/             # FastAPI 路由
-├── frontend/            # Next.js 前端
-├── knowledge/           # RAG 知识库（40 篇，5 分类，带来源与时间元数据）
-├── docker-compose.yml   # 6 服务编排
-├── Dockerfile           # 后端镜像
-└── nginx.conf           # Nginx 反向代理
+
+通用 MiMo LLM 继续使用 Anthropic 兼容接口：
+
+```dotenv
+ANTHROPIC_API_KEY=
+ANTHROPIC_BASE_URL=https://token-plan-cn.xiaomimimo.com/anthropic
+LLM_MODEL_ID=mimo-v2.5-pro
 ```
+
+MiMo ASR 使用独立 OpenAI 兼容接口：
+
+```dotenv
+MIMO_API_KEY=
+MIMO_ASR_BASE_URL=https://api.xiaomimimo.com/v1
+MIMO_ASR_MODEL=mimo-v2.5-asr
+MIMO_ASR_LANGUAGE=zh
+TRANSCRIPT_PROVIDER=mimo
+```
+
+同一个 Key 可以复用，但两个协议客户端不能混用。没有配置 ASR 时，前端禁用内容深度分析；转写失败时 Worker 降级为元数据分析，不编造视频内容。
+
+## 后台任务 API
+
+```text
+POST   /jobs
+GET    /jobs
+GET    /jobs/{job_id}
+POST   /jobs/{job_id}/cancel
+POST   /jobs/{job_id}/retry
+GET    /jobs/{job_id}/events
+GET    /reports/{report_id}
+POST   /reports/{report_id}/shares
+POST   /reports/{report_id}/feedback
+```
+
+状态：`pending`、`running`、`completed`、`partial`、`failed`、`cancelled`。
+
+Redis 只保存队列、临时状态、事件和缓存；长期业务事实全部进入 PostgreSQL。
+
+## Evidence 引用
+
+Analyst 输出：
+
+```json
+{
+  "claim": "代表样本的标题普遍明确指出任务和结果",
+  "claim_type": "observation",
+  "evidence_ids": ["ev_12345678abcdef00"],
+  "confidence": 0.86
+}
+```
+
+- `observation` 没有 Evidence 会被拒绝
+- 不存在的 `evidence_id` 会触发 `REPORT_VALIDATION_FAILED`
+- Writer 只能使用已有 claim 与 Evidence
+- 程序追加结构化结论索引和数据附录
+- 报告明确说明样本边界，不把单个视频外推为行业规律
+
+## ASR 与音频边界
+
+Worker 镜像内置 `ffmpeg` 和 `yt-dlp`。内容深度分析只处理公开可访问且用户有权分析的 B 站内容：
+
+- 仅接受 B 站 HTTPS URL，不绕过登录、付费或访问控制
+- 最长 600 秒，Base64 后最大 10MB
+- 音频只在 `tmp/` 临时存在，任务后自动删除且禁止提交
+- 按 BVID 与 `audio_hash` 缓存转写
+- 自动测试全部使用 Mock，不调用真实收费 API
+
+## 测试
+
+```powershell
+# Python
+.\.venv\Scripts\python.exe -m pytest -q
+
+# 前端
+cd frontend
+npm run lint
+npm run build
+
+# Compose
+cd ..
+docker compose config --quiet
+```
+
+当前验收：43 条 Python 测试，其中包含 20 条冻结 B 站产品输入回归；完整记录见 [验收文档](docs/validation-20260713.md)。
+
+## 研究评测边界
+
+- RAG：40 篇、235 个标题感知 chunk；自建固定集 28/28 命中，不代表开放域泛化
+- v2 架构 A/B：两组历史任务中 LLM 调用由 16→7、14→6，耗时由 164.8s→79.4s、179.6s→119.4s
+- 微调模型仅为 Researcher 可选 A/B 路径；direct-adapter hard/holdout 未证明稳定优于最强基座，因此产品默认仍使用 API 模型
+- BFCL、tau-bench 均为风格化自建评测，不是官方榜单
+
+## Logo 与品牌
+
+`frontend/public/logo-mark.svg`、`logo-wordmark.svg`、`favicon.svg` 和 `frontend/src/components/Logo.tsx` 均为本项目原创代码原生 SVG。图形由播放三角、趋势线和 Evidence 节点组成，不使用 B 站电视图标、粉色品牌元素或第三方商标素材。
