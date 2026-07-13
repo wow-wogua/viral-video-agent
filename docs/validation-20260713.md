@@ -11,10 +11,11 @@
 | Python compile/import | 通过 |
 | Alembic PostgreSQL 离线 SQL | 通过 |
 | `docker compose config --quiet` | 通过 |
-| Compose 服务 | 7 个核心服务启动；Nginx 可选入口未纳入本次端口冒烟 |
+| Compose 服务 | 8 个服务全部启动 |
 | PostgreSQL 迁移 | `20260713_0001` 成功执行 |
 | API 冒烟 | health、注册、Cookie、`/auth/me`、capabilities 通过 |
 | Worker | Arq 启动并连接 Redis |
+| Nginx | `/` 与 `/api/health` 均返回 200 |
 
 测试覆盖注册登录、Cookie、未登录访问、越权、幂等、取消、重试边界、Evidence 引用、分享只读与过期、反馈模型、MiMo ASR 请求格式、Base64 大小限制和 URL 白名单。自动测试未调用真实 LLM 或 ASR。
 
