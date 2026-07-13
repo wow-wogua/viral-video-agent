@@ -1,0 +1,22 @@
+[
+  {"id":"mvp-01","query":"分析B站AI编程赛道近期热门视频的标题结构和内容特征","analysis_mode":"standard"},
+  {"id":"mvp-02","query":"搜索B站数码评测赛道代表视频并给出选题建议","analysis_mode":"standard"},
+  {"id":"mvp-03","query":"分析B站美食探店热门视频的开头钩子和互动数据","analysis_mode":"standard"},
+  {"id":"mvp-04","query":"拆解B站知识科普竞品视频的标题与内容结构","analysis_mode":"standard"},
+  {"id":"mvp-05","query":"分析B站考研赛道近期爆款视频并生成可执行报告","analysis_mode":"standard"},
+  {"id":"mvp-06","query":"搜索B站新能源汽车评测热门视频样本并分析","analysis_mode":"standard"},
+  {"id":"mvp-07","query":"分析B站游戏攻略视频的选题方向和标题表达","analysis_mode":"standard"},
+  {"id":"mvp-08","query":"分析B站职场成长赛道代表视频与竞品差异","analysis_mode":"standard"},
+  {"id":"mvp-09","query":"搜索B站健身训练热门视频并提炼内容规律","analysis_mode":"standard"},
+  {"id":"mvp-10","query":"分析B站摄影教程热门视频的标题和时长特征","analysis_mode":"standard"},
+  {"id":"mvp-11","query":"深度分析B站AI工具视频的口播、脚本和开头钩子","analysis_mode":"deep"},
+  {"id":"mvp-12","query":"深度分析B站手机评测代表视频的脚本结构","analysis_mode":"deep"},
+  {"id":"mvp-13","query":"深度分析B站美食教程视频的口播节奏和信息结构","analysis_mode":"deep"},
+  {"id":"mvp-14","query":"分析B站母婴科普热门视频的Evidence与可信表达","analysis_mode":"standard"},
+  {"id":"mvp-15","query":"分析B站旅行攻略视频的选题与标题承诺","analysis_mode":"standard"},
+  {"id":"mvp-16","query":"搜索B站宠物赛道热门视频并给出内容建议","analysis_mode":"standard"},
+  {"id":"mvp-17","query":"分析B站财经科普代表视频并区分观察和推断","analysis_mode":"standard"},
+  {"id":"mvp-18","query":"分析B站求职面试视频的热门标题结构","analysis_mode":"standard"},
+  {"id":"mvp-19","query":"搜索B站家居改造爆款视频样本并分析","analysis_mode":"standard"},
+  {"id":"mvp-20","query":"分析B站音乐翻唱热门视频的内容形式和选题方向","analysis_mode":"standard"}
+]
