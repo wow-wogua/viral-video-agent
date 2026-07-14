@@ -52,7 +52,7 @@
 
 1. 项目2知识库按覆盖缺口扩充高质量摘要；当前 40 篇、235 个标题感知 chunk，保留来源、日期、类别、平台、章节和来源等级元数据。
 2. 项目1按 detail/list/general 拆检索路径并重跑 90 条评测。
-3. 项目2 v2 稳定后收集半真实 Researcher 轨迹，再决定项目3是否继续训练。
+3. 项目3 v4.1 已按当前 Researcher 动态工具契约完成训练、冻结评测、OpenAI 兼容服务、DeepSeek V4 Pro 同集基线和 3 条项目2只读 A/B。当前结论是把 v4.1 作为 Researcher 优先候选；项目2默认仍为 `deepseek-v4-pro`，Planner、Analyst、Writer 不切换，也不根据离线窄域结果自动更改产品默认模型。
 
 ## 明确不做
 

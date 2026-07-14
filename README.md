@@ -203,7 +203,7 @@ docker compose config --quiet
 
 - RAG：40 篇、235 个标题感知 chunk；自建固定集 28/28 命中，不代表开放域泛化
 - v2 架构 A/B：两组历史任务中 LLM 调用由 16→7、14→6，耗时由 164.8s→79.4s、179.6s→119.4s
-- 微调模型仅为 Researcher 可选 A/B 路径；direct-adapter hard/holdout 未证明稳定优于最强基座，因此产品默认仍使用 API 模型
+- 微调模型仅为 Researcher 可选 A/B 路径。项目三 v4.1 已在冻结的自建窄域同集评测上超过 DeepSeek V4 Pro，并完成 3 条冻结任务的只读接入 A/B；它只是 Researcher 优先候选，未证明端到端产品质量、成本或延迟全面更优，因此项目默认仍使用 `deepseek-v4-pro`，不会自动切换
 - BFCL、tau-bench 均为风格化自建评测，不是官方榜单
 
 ## Logo 与品牌
