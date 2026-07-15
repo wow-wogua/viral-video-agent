@@ -4,6 +4,41 @@
 
 > 当前真实视频搜索仅支持 B 站。项目不会宣称支持抖音、快手或小红书实时分析。
 
+## 核心 Agent 工作流
+
+这个项目首先是一个 LangGraph 多 Agent 系统，Next.js、FastAPI、Arq 和 PostgreSQL 是让它可排队、可恢复、可追踪地运行的产品支撑。`Worker` 只是承载整张状态图的后台进程，不是用来替代 Researcher、Analyst 或 Writer 的单一 Agent。
+
+```text
+用户请求
+  │
+  ▼
+Entry：意图 / 平台 / 能力预检（分析主路径为确定性判断）
+  │
+  ▼
+Planner：拆成最多 3 个研究任务
+  │
+  ▼
+Research Loop / Researcher：LLM 选择工具与参数
+  ├─ search_videos ─────────────→ Bilibili 公开数据
+  ├─ rag_search ────────────────→ ChromaDB 知识库
+  ├─ get_transcript（深度模式）─→ MiMo ASR
+  └─ 动态能力注册 + Pydantic 参数校验 + MCP 调用/回退
+  │  累积结构化 Evidence
+  ▼
+Evidence Gate：无真实证据则 partial/终止
+  │
+  ▼
+Analyst：基于 Evidence 生成 observation / inference / recommendation
+  │  最多 2 轮，输出带 evidence_ids 的结构化 claims
+  ▼
+Writer：只组织已有 claims 与 Evidence，单次生成报告，不新增事实
+  │
+  ▼
+引用校验 + 确定性附录 + 报告持久化
+```
+
+v2 的重点不是“角色数量”，而是把语义决策留给 Planner、Researcher、Analyst、Writer，把平台边界、循环上限、Evidence 门禁和发布校验交给代码。v1 的 Supervisor 集中路由回环仍保留用于同任务 A/B 与回退，但不参与默认正常链路。
+
 ## 前端体验
 
 前端采用“成熟动漫编辑部 / 科技内容研究工作台”的视觉方向：公共页面使用更鲜明的编辑网格、分镜与 Evidence 节点语言，工作台和报告页保持克制，以长报告、结构化结论和来源证据的可读性为优先。浅色与深色主题共用语义 Token，支持桌面、平板、手机、键盘操作、减少动态效果和浏览器打印/PDF。
@@ -36,7 +71,7 @@
 - MiMo ASR 内容深度分析：独立 OpenAI 兼容客户端，讯飞保留为可选回退
 - 桌面、平板、手机与深浅主题响应式界面
 
-## 架构
+## 产品运行与持久化架构
 
 ```text
 Next.js UI
@@ -48,14 +83,18 @@ FastAPI ─────────────── PostgreSQL 16
 Arq + Redis
   │ queue/status/events/cache/locks
   ▼
-Worker → LangGraph v2 → MCP tools → Bilibili / ChromaDB / optional ASR
+Worker
+  └─ 执行上方完整 LangGraph v2 Agent 工作流
 ```
+
+工具调用由图内 Research Loop 发起，经 MCP Server 访问 Bilibili、ChromaDB 与可选 ASR。PostgreSQL 保存长期业务事实；Redis 只承担队列、临时状态、事件、锁和缓存。
 
 Compose 包含 8 个服务：`frontend`、`app`、`worker`、`postgres`、`redis`、`chromadb`、`mcp-server`、`nginx`。PostgreSQL、Redis 和 ChromaDB 均使用 Docker 命名卷，不把数据库内部文件写入仓库。
 
 详细说明：
 
 - [产品架构与任务流](docs/product-mvp.md)
+- [LangGraph v2 Agent 架构与 A/B](docs/architecture-v2-plan.md)
 - [权限、数据与 Evidence 边界](docs/security-and-data.md)
 - [2026-07-13 验收记录](docs/validation-20260713.md)
 
