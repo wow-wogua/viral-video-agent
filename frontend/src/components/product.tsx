@@ -1,31 +1,205 @@
 'use client';
 
+import Link from 'next/link';
 import { useState } from 'react';
-import { Check, ChevronRight, Clock3, ExternalLink, Link2, MessageSquare, ShieldCheck } from 'lucide-react';
-import { Button, Card, Input, Modal, Select, StatusBadge, Toast } from '@/components/ui';
+import { ArrowUpRight, Check, CheckCircle2, ChevronRight, Clock3, Copy, ExternalLink, Link2, MessageSquare, ShieldCheck } from 'lucide-react';
+import { Button, Card, Input, Modal, Select, StatusBadge, Textarea, Toast } from '@/components/ui';
 import type { Claim, EvidenceItem, JobEvent, UsageSummary } from '@/lib/api';
-import { createFeedback, createShareLink } from '@/lib/api';
+import { createFeedback, createShareLink, readableError } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
 export function EvidenceCard({ evidence }: { evidence: EvidenceItem }) {
-  return <Card id={evidence.evidence_id} className="scroll-mt-24 p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><div className="mb-2 flex items-center gap-2"><span className="font-mono text-xs text-indigo-600 dark:text-indigo-300">{evidence.evidence_id}</span><span className="rounded-full bg-muted px-2 py-0.5 text-xs">{evidence.source_type}</span></div><h3 className="font-medium leading-snug">{evidence.title}</h3>{evidence.summary && <p className="mt-2 text-sm text-muted-foreground">{evidence.summary}</p>}</div>{evidence.source_url && <a href={evidence.source_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-sm font-medium text-indigo-600 hover:underline dark:text-indigo-300">打开来源<ExternalLink className="h-3.5 w-3.5"/></a>}</div><dl className="mt-4 grid gap-3 border-t pt-3 text-xs text-muted-foreground sm:grid-cols-3"><div><dt>平台</dt><dd className="mt-1 text-foreground">{evidence.platform || 'B站'}</dd></div><div><dt>抓取时间</dt><dd className="mt-1 text-foreground">{new Date(evidence.fetched_at).toLocaleString('zh-CN')}</dd></div><div><dt>数据字段</dt><dd className="mt-1 text-foreground">{Object.keys(evidence.data_fields || {}).join('、') || '来源文本'}</dd></div></dl></Card>;
+  return (
+    <Card id={evidence.evidence_id} className="print-avoid group scroll-mt-24 overflow-hidden p-0 transition-[border-color,box-shadow] hover:border-primary/40 hover:shadow-float">
+      <div className="h-1 bg-gradient-to-r from-primary via-primary to-accent" />
+      <div className="p-4 sm:p-5">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0 flex-1">
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+              <span className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-2.5 py-1 font-mono text-[11px] font-semibold text-primary"><span className="h-1.5 w-1.5 rounded-full bg-primary" aria-hidden="true" />{evidence.evidence_id}</span>
+              <span className="rounded-full border bg-muted px-2.5 py-1 text-[11px] font-semibold text-muted-foreground">{evidence.source_type}</span>
+            </div>
+            <h3 className="break-content text-base font-bold leading-6">{evidence.title}</h3>
+            {evidence.summary && <p className="mt-2 text-pretty text-sm leading-6 text-muted-foreground">{evidence.summary}</p>}
+          </div>
+          {evidence.source_url && (
+            <a href={evidence.source_url} target="_blank" rel="noreferrer" className="inline-flex min-h-11 shrink-0 items-center gap-2 self-start rounded-lg border px-3 text-sm font-semibold text-primary transition-colors hover:border-primary/40 hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+              打开来源<ExternalLink className="h-4 w-4" aria-hidden="true" />
+            </a>
+          )}
+        </div>
+        <dl className="mt-5 grid divide-y border-t text-xs sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+          <div className="py-3 sm:pr-4"><dt className="font-mono uppercase tracking-[.12em] text-muted-foreground">Platform</dt><dd className="mt-1.5 font-semibold text-foreground">{evidence.platform || 'B站'}</dd></div>
+          <div className="py-3 sm:px-4"><dt className="font-mono uppercase tracking-[.12em] text-muted-foreground">Fetched</dt><dd className="mt-1.5 font-semibold text-foreground">{new Date(evidence.fetched_at).toLocaleString('zh-CN')}</dd></div>
+          <div className="py-3 sm:pl-4"><dt className="font-mono uppercase tracking-[.12em] text-muted-foreground">Fields</dt><dd className="break-content mt-1.5 font-semibold text-foreground">{Object.keys(evidence.data_fields || {}).join('、') || '来源文本'}</dd></div>
+        </dl>
+      </div>
+    </Card>
+  );
 }
 
-const claimMeta = { observation: ['数据观察', 'border-cyan-500 bg-cyan-50/50 dark:bg-cyan-950/20'], inference: ['分析推断', 'border-amber-500 bg-amber-50/50 dark:bg-amber-950/20'], recommendation: ['行动建议', 'border-emerald-500 bg-emerald-50/50 dark:bg-emerald-950/20'] } as const;
+const claimMeta = {
+  observation: { label: '数据观察', index: 'OBS', style: 'border-info bg-info/5 text-info' },
+  inference: { label: '分析推断', index: 'INF', style: 'border-warning bg-warning/10 text-warning-foreground dark:text-warning' },
+  recommendation: { label: '行动建议', index: 'ACT', style: 'border-success bg-success/5 text-success' },
+} as const;
+
 export function ReportClaim({ claim }: { claim: Claim }) {
-  const [label, style] = claimMeta[claim.claim_type] ?? claimMeta.inference;
-  return <div className={cn('rounded-r-xl border-l-4 p-4', style)}><div className="mb-2 flex items-center justify-between gap-3"><span className="text-xs font-semibold uppercase tracking-wide">{label}</span><span className="text-xs text-muted-foreground">置信度 {Math.round(claim.confidence * 100)}%</span></div><p className="text-sm leading-6">{claim.claim}</p><div className="mt-3 flex flex-wrap gap-2">{claim.evidence_ids.length ? claim.evidence_ids.map((id) => <a key={id} href={`#${id}`} className="inline-flex items-center gap-1 rounded-full bg-background px-2 py-1 font-mono text-xs text-indigo-600 hover:underline dark:text-indigo-300"><Link2 className="h-3 w-3"/>{id}</a>) : <span className="text-xs text-amber-700 dark:text-amber-300">该建议基于推断，不包含直接数值证据</span>}</div></div>;
+  const meta = claimMeta[claim.claim_type] ?? claimMeta.inference;
+  return (
+    <article className={cn('print-avoid rounded-r-xl border border-l-4 bg-card p-4 sm:p-5', meta.style)}>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <span className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[.12em]"><span className="font-mono text-[10px] opacity-70">{meta.index}</span>{meta.label}</span>
+        <span className="font-mono text-[11px] tabular-nums text-muted-foreground">置信度 {Math.round(claim.confidence * 100)}%</span>
+      </div>
+      <p className="text-pretty text-sm font-medium leading-7 text-foreground">{claim.claim}</p>
+      <div className="mt-4 flex flex-wrap gap-2">
+        {claim.evidence_ids.length ? claim.evidence_ids.map((id) => (
+          <a key={id} href={`#${id}`} className="inline-flex min-h-9 items-center gap-1.5 rounded-full border bg-background px-2.5 font-mono text-[11px] font-semibold text-primary transition-colors hover:border-primary/40 hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+            <Link2 className="h-3 w-3" aria-hidden="true" />{id}
+          </a>
+        )) : <span className="inline-flex items-center gap-2 text-xs font-medium text-warning-foreground dark:text-warning"><span className="h-1.5 w-1.5 rounded-full bg-warning" aria-hidden="true" />该建议基于推断，不包含直接数值证据</span>}
+      </div>
+    </article>
+  );
 }
 
-const phaseLabels: Record<string, string> = { queued: '排队中', collecting: '正在采集B站数据', retrieving: '正在检索知识库', validating: '正在验证 Evidence', analyzing: '正在分析', writing: '正在生成报告', persisting: '正在保存报告', completed: '报告已生成', partial: '已生成部分结果', failed: '任务失败', cancelled: '任务已取消' };
+const phaseLabels: Record<string, string> = {
+  queued: '排队中', collecting: '正在采集 B 站数据', retrieving: '正在检索知识库', validating: '正在验证 Evidence', analyzing: '正在分析', writing: '正在生成报告', persisting: '正在保存报告', completed: '报告已生成', partial: '已生成部分结果', failed: '任务失败', cancelled: '任务已取消',
+};
+
 export function JobProgress({ status, events }: { status: string; events: JobEvent[] }) {
-  return <div className="space-y-3">{events.map((event, index) => <div key={`${event.created_at}-${index}`} className="flex gap-3"><div className="mt-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-indigo-50 text-indigo-600 dark:bg-indigo-950 dark:text-indigo-300">{event.level === 'error' ? '!' : event.progress >= 100 ? <Check className="h-3.5 w-3.5"/> : <Clock3 className="h-3.5 w-3.5"/>}</div><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center justify-between gap-2"><p className="text-sm font-medium">{phaseLabels[event.event_type] || event.message}</p><span className="text-xs text-muted-foreground">{event.progress}%</span></div><p className="mt-0.5 text-sm text-muted-foreground">{event.message}</p></div></div>)}{!events.length && <div className="flex items-center gap-3 text-sm text-muted-foreground"><Clock3 className="h-4 w-4"/>{status === 'pending' ? '任务已创建，等待 Worker 接收。' : '正在读取任务事件。'}</div>}</div>;
+  return (
+    <div className="relative space-y-0">
+      {events.map((event, index) => {
+        const complete = event.progress >= 100;
+        const failed = event.level === 'error';
+        return (
+          <div key={`${event.created_at}-${index}`} className="relative grid grid-cols-[2.5rem_1fr] gap-3 pb-5 last:pb-0">
+            {index < events.length - 1 && <span className="absolute left-[1.18rem] top-8 h-[calc(100%-1.25rem)] w-px bg-border" aria-hidden="true" />}
+            <div className={cn('relative z-10 grid h-10 w-10 place-items-center rounded-full border bg-background', failed ? 'border-destructive/40 text-destructive' : complete ? 'border-success/40 text-success' : 'border-primary/40 text-primary')}>
+              {failed ? <span className="font-mono text-sm font-bold">!</span> : complete ? <Check className="h-4 w-4" aria-hidden="true" /> : <Clock3 className="h-4 w-4" aria-hidden="true" />}
+            </div>
+            <div className="min-w-0 pt-1">
+              <div className="flex flex-wrap items-center justify-between gap-2"><p className="text-sm font-bold">{phaseLabels[event.event_type] || event.message}</p><span className="font-mono text-[11px] tabular-nums text-muted-foreground">{event.progress}%</span></div>
+              <p className="break-content mt-1 text-sm leading-6 text-muted-foreground">{event.message}</p>
+            </div>
+          </div>
+        );
+      })}
+      {!events.length && <div className="flex items-center gap-3 rounded-lg border border-dashed p-4 text-sm text-muted-foreground"><Clock3 className="h-4 w-4 text-primary" aria-hidden="true" />{status === 'pending' ? '任务已创建，等待 Worker 接收。' : '正在读取任务事件。'}</div>}
+    </div>
+  );
 }
 
-export function UsageCard({ usage }: { usage: UsageSummary }) { const ratio = Math.min(100, Math.round((usage.jobs_used / Math.max(usage.jobs_limit, 1)) * 100)); return <Card className="p-5"><div className="flex items-center justify-between"><div><p className="text-sm text-muted-foreground">本月分析用量</p><p className="mt-1 text-2xl font-semibold">{usage.jobs_used} <span className="text-sm font-normal text-muted-foreground">/ {usage.jobs_limit} 次</span></p></div><ShieldCheck className="h-8 w-8 text-indigo-500"/></div><div className="mt-4 h-2 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-indigo-600" style={{ width: `${ratio}%` }}/></div><p className="mt-2 text-xs text-muted-foreground">标准分析与内容深度分析都会计入任务次数。</p></Card>; }
+export function UsageCard({ usage }: { usage: UsageSummary }) {
+  const ratio = Math.min(100, Math.round((usage.jobs_used / Math.max(usage.jobs_limit, 1)) * 100));
+  return (
+    <Card className="relative overflow-hidden p-5">
+      <div className="halftone absolute -right-6 -top-8 h-28 w-28 opacity-25" />
+      <div className="relative flex items-start justify-between gap-4">
+        <div><p className="eyebrow">Monthly usage</p><p className="mt-2 text-3xl font-black tabular-nums">{usage.jobs_used}<span className="ml-2 text-sm font-medium text-muted-foreground">/ {usage.jobs_limit} 次</span></p></div>
+        <div className="grid h-11 w-11 place-items-center rounded-xl border border-primary/25 bg-primary/10 text-primary"><ShieldCheck className="h-5 w-5" aria-hidden="true" /></div>
+      </div>
+      <div className="relative mt-5 h-2 overflow-hidden rounded-full bg-muted" role="progressbar" aria-label="本月任务用量" aria-valuemin={0} aria-valuemax={usage.jobs_limit} aria-valuenow={usage.jobs_used}><div className="h-full rounded-full bg-gradient-to-r from-primary to-info transition-[width]" style={{ width: `${ratio}%` }} /></div>
+      <p className="relative mt-3 text-xs leading-5 text-muted-foreground">标准分析与内容深度分析都会计入任务次数。</p>
+    </Card>
+  );
+}
 
-export function FeedbackForm({ reportId }: { reportId: string }) { const [rating, setRating] = useState('5'); const [useful, setUseful] = useState(true); const [reason, setReason] = useState(''); const [comment, setComment] = useState(''); const [sent, setSent] = useState(false); const submit = async () => { await createFeedback(reportId, { rating: Number(rating), useful, reason, comment, adopted: null }); setSent(true); }; return <Card className="p-5"><div className="mb-4 flex items-center gap-2"><MessageSquare className="h-4 w-4 text-indigo-500"/><h2 className="font-semibold">这份报告有帮助吗？</h2></div><div className="grid gap-3 sm:grid-cols-2"><Select value={useful ? 'yes' : 'no'} onChange={(e) => setUseful(e.target.value === 'yes')} aria-label="是否有用"><option value="yes">有用</option><option value="no">无用</option></Select><Select value={rating} onChange={(e) => setRating(e.target.value)} aria-label="评分">{[5,4,3,2,1].map((value) => <option key={value} value={value}>{value} 分</option>)}</Select></div><Input className="mt-3" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="问题类型或主要原因"/><textarea className="mt-3 min-h-24 w-full rounded-xl border bg-background p-3 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20" value={comment} onChange={(e) => setComment(e.target.value)} placeholder="可选：告诉我们哪些结论最有用，或哪里需要改进"/><Button className="mt-3" onClick={submit}>提交反馈</Button>{sent && <Toast message="反馈已保存，感谢你的帮助。"/>}</Card>; }
+export function FeedbackForm({ reportId }: { reportId: string }) {
+  const [rating, setRating] = useState('5');
+  const [useful, setUseful] = useState(true);
+  const [reason, setReason] = useState('');
+  const [comment, setComment] = useState('');
+  const [sent, setSent] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
-export function ShareDialog({ reportId }: { reportId: string }) { const [open, setOpen] = useState(false); const [days, setDays] = useState('7'); const [url, setUrl] = useState(''); const create = async () => { const result = await createShareLink(reportId, Number(days)); setUrl(`${window.location.origin}/share/${result.token}`); }; return <><Button variant="secondary" size="sm" onClick={() => setOpen(true)}>分享</Button><Modal open={open} title="创建只读分享链接" onClose={() => setOpen(false)}><p className="mb-4 text-sm text-muted-foreground">分享页不会展示用户信息、成本详情或内部执行日志，可随时在设置中撤销。</p><Select value={days} onChange={(e) => setDays(e.target.value)}><option value="1">1 天后过期</option><option value="7">7 天后过期</option><option value="30">30 天后过期</option></Select>{url ? <div className="mt-4 flex gap-2"><Input readOnly value={url}/><Button onClick={() => navigator.clipboard.writeText(url)}>复制</Button></div> : <Button className="mt-4 w-full" onClick={create}>生成高熵链接</Button>}</Modal></>; }
+  const submit = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      await createFeedback(reportId, { rating: Number(rating), useful, reason, comment, adopted: null });
+      setSent(true);
+    } catch (err) {
+      setError(readableError(err));
+    } finally {
+      setLoading(false);
+    }
+  };
 
-export function JobSummaryCard({ id, title, status, progress, createdAt }: { id: string; title: string; status: string; progress: number; createdAt: string }) { return <a href={`/jobs/${id}`} className="block"><Card className="p-4 transition hover:border-indigo-300"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate font-medium">{title}</p><p className="mt-1 text-xs text-muted-foreground">{new Date(createdAt).toLocaleString('zh-CN')}</p></div><StatusBadge status={status}/></div><div className="mt-4 flex items-center gap-3"><div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted"><div className="h-full bg-indigo-600" style={{width:`${progress}%`}}/></div><ChevronRight className="h-4 w-4 text-muted-foreground"/></div></Card></a>; }
+  return (
+    <Card className="p-5 sm:p-6" data-print-hide="true">
+      <div className="mb-5 flex items-start gap-3 border-b pb-4"><div className="grid h-10 w-10 place-items-center rounded-lg border bg-primary/10 text-primary"><MessageSquare className="h-4 w-4" aria-hidden="true" /></div><div><p className="eyebrow">Feedback loop</p><h2 className="mt-1 font-bold">这份报告有帮助吗？</h2></div></div>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <label className="text-sm font-semibold">是否有用<Select className="mt-2" value={useful ? 'yes' : 'no'} onChange={(event) => setUseful(event.target.value === 'yes')}><option value="yes">有用</option><option value="no">无用</option></Select></label>
+        <label className="text-sm font-semibold">评分<Select className="mt-2" value={rating} onChange={(event) => setRating(event.target.value)}>{[5, 4, 3, 2, 1].map((value) => <option key={value} value={value}>{value} 分</option>)}</Select></label>
+      </div>
+      <label className="mt-4 block text-sm font-semibold">主要原因<Input className="mt-2" value={reason} onChange={(event) => setReason(event.target.value)} placeholder="例如：样本相关、建议具体、证据不足" /></label>
+      <label className="mt-4 block text-sm font-semibold">补充说明 <span className="font-normal text-muted-foreground">（可选）</span><Textarea className="mt-2 min-h-24" value={comment} onChange={(event) => setComment(event.target.value)} placeholder="告诉我们哪些结论最有用，或哪里需要改进" /></label>
+      {error && <p className="mt-3 text-sm font-medium text-destructive" role="alert">{error} 请稍后重试。</p>}
+      <Button className="mt-4" onClick={submit} isLoading={loading}>提交反馈</Button>
+      {sent && <Toast message="反馈已保存，感谢你的帮助。" />}
+    </Card>
+  );
+}
+
+export function ShareDialog({ reportId }: { reportId: string }) {
+  const [open, setOpen] = useState(false);
+  const [days, setDays] = useState('7');
+  const [url, setUrl] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [copied, setCopied] = useState(false);
+
+  const create = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const result = await createShareLink(reportId, Number(days));
+      setUrl(`${window.location.origin}/share/${result.token}`);
+    } catch (err) {
+      setError(readableError(err));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const copy = async () => {
+    await navigator.clipboard.writeText(url);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1800);
+  };
+
+  return (
+    <>
+      <Button variant="secondary" size="sm" onClick={() => setOpen(true)}><ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" />分享</Button>
+      <Modal open={open} title="创建只读分享链接" onClose={() => setOpen(false)}>
+        <p className="text-pretty text-sm leading-6 text-muted-foreground">分享页不会展示用户信息、成本详情或内部执行日志，可随时在设置中撤销。</p>
+        <label className="mt-5 block text-sm font-semibold">有效期<Select className="mt-2" value={days} onChange={(event) => setDays(event.target.value)} disabled={Boolean(url)}><option value="1">1 天后过期</option><option value="7">7 天后过期</option><option value="30">30 天后过期</option></Select></label>
+        {error && <p className="mt-3 text-sm font-medium text-destructive" role="alert">{error} 请稍后重试。</p>}
+        {url ? (
+          <div className="mt-5">
+            <label className="text-sm font-semibold">分享地址<Input className="mt-2 font-mono text-xs" readOnly value={url} /></label>
+            <Button className="mt-3 w-full" onClick={copy}>{copied ? <CheckCircle2 className="h-4 w-4" aria-hidden="true" /> : <Copy className="h-4 w-4" aria-hidden="true" />}{copied ? '已复制' : '复制链接'}</Button>
+          </div>
+        ) : <Button className="mt-5 w-full" onClick={create} isLoading={loading}>生成高熵链接</Button>}
+      </Modal>
+    </>
+  );
+}
+
+export function JobSummaryCard({ id, title, status, progress, createdAt }: { id: string; title: string; status: string; progress: number; createdAt: string }) {
+  return (
+    <Link href={`/jobs/${id}`} className="group block rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background">
+      <Card className="p-4 transition-[border-color,box-shadow] group-hover:border-primary/40 group-hover:shadow-float sm:p-5">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0"><p className="break-content font-bold leading-6">{title}</p><p className="mt-1 font-mono text-[11px] tabular-nums text-muted-foreground">{new Date(createdAt).toLocaleString('zh-CN')}</p></div>
+          <StatusBadge status={status} />
+        </div>
+        <div className="mt-4 flex items-center gap-3"><div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted" role="progressbar" aria-label="任务进度" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress}><div className="h-full bg-gradient-to-r from-primary to-info" style={{ width: `${progress}%` }} /></div><span className="font-mono text-[11px] text-muted-foreground">{progress}%</span><ChevronRight className="h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" aria-hidden="true" /></div>
+      </Card>
+    </Link>
+  );
+}

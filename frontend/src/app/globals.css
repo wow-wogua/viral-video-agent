@@ -4,70 +4,236 @@
 
 @layer base {
   :root {
-    --background: 220 33% 98%;
+    --background: 42 38% 97%;
     --foreground: 222 47% 11%;
-    --card: 0 0% 100%;
+    --surface: 40 30% 99%;
+    --surface-elevated: 0 0% 100%;
+    --card: 40 30% 99%;
     --card-foreground: 222 47% 11%;
     --popover: 0 0% 100%;
     --popover-foreground: 222 47% 11%;
-    --primary: 243 75% 59%;
+    --primary: 198 91% 43%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 220 14% 96%;
-    --secondary-foreground: 222 47% 11%;
-    --muted: 220 14% 96%;
-    --muted-foreground: 215 16% 47%;
-    --accent: 220 14% 96%;
+    --secondary: 222 47% 14%;
+    --secondary-foreground: 40 30% 98%;
+    --accent: 17 86% 58%;
     --accent-foreground: 222 47% 11%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 220 13% 91%;
-    --input: 220 13% 91%;
-    --ring: 243 75% 59%;
-    --radius: .75rem;
+    --muted: 210 24% 94%;
+    --muted-foreground: 215 20% 38%;
+    --success: 160 84% 34%;
+    --success-foreground: 0 0% 100%;
+    --warning: 35 92% 50%;
+    --warning-foreground: 25 90% 14%;
+    --info: 198 91% 43%;
+    --info-foreground: 0 0% 100%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 215 22% 84%;
+    --input: 215 22% 79%;
+    --ring: 198 91% 43%;
+    --radius-lg: .625rem;
+    --radius-xl: .875rem;
+    --radius-2xl: 1.125rem;
+    --shadow-editorial: 0 1px 0 rgba(15, 23, 42, .06), 0 12px 30px rgba(15, 23, 42, .05);
+    --shadow-float: 0 24px 70px rgba(15, 23, 42, .14);
+    --motion-fast: 160ms;
+    --motion-base: 240ms;
+    --ease-editorial: cubic-bezier(.22, 1, .36, 1);
   }
 
   .dark {
-    --background: 222 47% 8%;
-    --foreground: 210 40% 98%;
-    --card: 222 40% 11%;
+    --background: 222 48% 7%;
+    --foreground: 210 40% 96%;
+    --surface: 222 42% 9%;
+    --surface-elevated: 220 37% 12%;
+    --card: 220 37% 11%;
     --card-foreground: 210 40% 98%;
-    --popover: 222 40% 11%;
+    --popover: 220 37% 11%;
     --popover-foreground: 210 40% 98%;
-    --primary: 243 75% 65%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 217 33% 17%;
+    --primary: 194 93% 56%;
+    --primary-foreground: 222 47% 8%;
+    --secondary: 218 32% 18%;
     --secondary-foreground: 210 40% 98%;
-    --muted: 217 33% 17%;
-    --muted-foreground: 215 20% 65%;
-    --accent: 217 33% 17%;
-    --accent-foreground: 210 40% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 217 33% 20%;
-    --input: 217 33% 20%;
-    --ring: 243 75% 65%;
+    --accent: 18 92% 66%;
+    --accent-foreground: 222 47% 8%;
+    --muted: 218 30% 16%;
+    --muted-foreground: 214 18% 70%;
+    --success: 158 68% 48%;
+    --success-foreground: 222 47% 8%;
+    --warning: 39 96% 58%;
+    --warning-foreground: 222 47% 8%;
+    --info: 194 93% 56%;
+    --info-foreground: 222 47% 8%;
+    --destructive: 0 76% 58%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 218 27% 24%;
+    --input: 218 27% 30%;
+    --ring: 194 93% 56%;
+    --shadow-editorial: 0 1px 0 rgba(255, 255, 255, .04), 0 18px 42px rgba(0, 0, 0, .2);
+    --shadow-float: 0 28px 80px rgba(0, 0, 0, .42);
   }
 }
 
 @layer base {
   * {
-    @apply border-[hsl(var(--border))];
+    @apply border-border;
   }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
   body {
-    @apply bg-[hsl(var(--background))] text-[hsl(var(--foreground))];
+    @apply bg-background text-foreground;
+    min-width: 320px;
+    font-family: "Segoe UI Variable", "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+    line-height: 1.6;
+    text-rendering: optimizeLegibility;
+  }
+
+  ::selection {
+    color: hsl(var(--secondary-foreground));
+    background: hsl(var(--secondary));
+  }
+
+  :focus-visible {
+    scroll-margin: 6rem;
+  }
+
+  a,
+  button,
+  [role='button'] {
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+
+  button,
+  [role='button'] {
+    cursor: pointer;
+  }
+
+  button:disabled,
+  [aria-disabled='true'] {
+    cursor: not-allowed;
   }
 }
 
 @layer components {
-  .card-3d { @apply border bg-card shadow-sm transition-shadow; }
-  .card-3d:hover { @apply shadow-md; }
-  .report-prose table { @apply block max-w-full overflow-x-auto; }
-  .report-prose a { @apply break-all text-indigo-600 dark:text-indigo-300; }
+  .skip-link {
+    @apply fixed left-4 top-3 z-[100] -translate-y-20 rounded-lg bg-secondary px-4 py-2 text-sm font-semibold text-secondary-foreground shadow-float transition-transform focus:translate-y-0;
+  }
+
+  .eyebrow {
+    @apply inline-flex items-center gap-2 font-mono text-[11px] font-semibold uppercase tracking-[.16em] text-primary;
+  }
+
+  .editorial-number {
+    @apply font-mono text-xs tabular-nums text-muted-foreground;
+  }
+
+  .editorial-rule {
+    @apply border-t border-foreground/20;
+  }
+
+  .editorial-grid {
+    background-image:
+      linear-gradient(to right, hsl(var(--foreground) / .055) 1px, transparent 1px),
+      linear-gradient(to bottom, hsl(var(--foreground) / .045) 1px, transparent 1px);
+    background-size: 72px 72px;
+  }
+
+  .halftone {
+    background-image: radial-gradient(circle, hsl(var(--foreground) / .16) 1px, transparent 1.25px);
+    background-size: 9px 9px;
+  }
+
+  .speed-lines {
+    background-image: repeating-linear-gradient(118deg, transparent 0 13px, hsl(var(--primary) / .16) 14px 15px, transparent 16px 27px);
+  }
+
+  .title-balance {
+    text-wrap: balance;
+  }
+
+  .text-pretty {
+    text-wrap: pretty;
+  }
+
+  .break-content {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  .report-prose {
+    @apply text-[15px] leading-7 text-foreground;
+  }
+
+  .report-prose > * + * {
+    @apply mt-4;
+  }
+
+  .report-prose h1,
+  .report-prose h2,
+  .report-prose h3 {
+    @apply font-bold leading-tight tracking-[-.025em] text-foreground;
+    text-wrap: balance;
+  }
+
+  .report-prose h1 { @apply mt-0 text-3xl sm:text-4xl; }
+  .report-prose h2 { @apply mt-10 border-t pt-6 text-2xl; }
+  .report-prose h3 { @apply mt-7 text-lg; }
+  .report-prose p { @apply text-pretty; }
+  .report-prose strong { @apply font-semibold text-foreground; }
+  .report-prose ul { @apply list-disc space-y-2 pl-5; }
+  .report-prose ol { @apply list-decimal space-y-2 pl-5; }
+  .report-prose blockquote { @apply border-l-4 border-primary bg-primary/5 px-5 py-4 text-foreground; }
+  .report-prose code { @apply rounded bg-muted px-1.5 py-0.5 font-mono text-[.9em]; }
+  .report-prose pre { @apply max-w-full overflow-x-auto rounded-xl bg-secondary p-4 text-secondary-foreground; }
+  .report-prose pre code { @apply bg-transparent p-0 text-inherit; }
+  .report-prose table { @apply block max-w-full overflow-x-auto border-collapse text-sm; }
+  .report-prose th { @apply border-b-2 bg-muted px-3 py-2 text-left font-semibold; }
+  .report-prose td { @apply border-b px-3 py-2 align-top; }
+  .report-prose a {
+    @apply font-medium text-primary underline decoration-primary/40 underline-offset-4 hover:decoration-primary;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  .motion-enter {
+    animation: motion-enter var(--motion-base) var(--ease-editorial) both;
+  }
+
+  .motion-enter-delay {
+    animation: motion-enter 360ms var(--ease-editorial) 90ms both;
+  }
+}
+
+@keyframes motion-enter {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: .01ms !important;
+  }
 }
 
 @media print {
-  aside, header, nav { display: none !important; }
-  main { padding: 0 !important; }
+  @page { margin: 18mm; }
+  aside, header, nav, .skip-link, [data-print-hide='true'] { display: none !important; }
+  main { max-width: none !important; padding: 0 !important; }
   body { background: white !important; color: black !important; }
-  .report-prose { font-size: 11pt; }
+  * { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+  .report-prose { font-size: 10.5pt; line-height: 1.55; }
+  .report-prose a { color: black !important; text-decoration: none !important; }
+  .report-prose table { display: table; width: 100%; overflow: visible; break-inside: avoid; }
+  .report-prose blockquote, .print-avoid { break-inside: avoid; page-break-inside: avoid; }
+  .print-page-break { break-before: page; page-break-before: always; }
+  .print-card { border: 0 !important; box-shadow: none !important; }
+  .print-header { background: white !important; color: black !important; padding-left: 0 !important; padding-right: 0 !important; }
 }

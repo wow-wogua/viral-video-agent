@@ -4,17 +4,23 @@
 
 > 当前真实视频搜索仅支持 B 站。项目不会宣称支持抖音、快手或小红书实时分析。
 
-## 产品截图
+## 前端体验
+
+前端采用“成熟动漫编辑部 / 科技内容研究工作台”的视觉方向：公共页面使用更鲜明的编辑网格、分镜与 Evidence 节点语言，工作台和报告页保持克制，以长报告、结构化结论和来源证据的可读性为优先。浅色与深色主题共用语义 Token，支持桌面、平板、手机、键盘操作、减少动态效果和浏览器打印/PDF。
 
 ![产品首页](output/playwright/home-desktop.png)
 
 <details>
-<summary>移动端首页与用户 Dashboard</summary>
+<summary>移动端首页、用户 Dashboard 与报告详情</summary>
 
 ![移动端首页](output/playwright/home-mobile.png)
 
 ![用户 Dashboard](output/playwright/dashboard-desktop.png)
+
+![报告详情](output/playwright/report-desktop.png)
 </details>
+
+设计决策见 [前端设计说明](docs/frontend-design.md)，本轮真实浏览器与构建检查见 [2026-07-15 前端验收记录](docs/frontend-validation-20260715.md)。
 
 ## 产品能力
 
