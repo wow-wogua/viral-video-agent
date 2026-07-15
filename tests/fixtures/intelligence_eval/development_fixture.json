@@ -1,0 +1,28 @@
+{
+  "schema_version": "content-intelligence-eval.p0.3",
+  "dataset_id": "sanitized-development-fixture",
+  "created_at": "2026-07-15T00:00:00+08:00",
+  "contains_hidden_holdout": false,
+  "keywords": [
+    {"id":"dev-01","keyword":"宽泛赛道甲","category":"broad","rationale":"schema fixture","review_status":"unreviewed","reviewer_count":0,"snapshots":[],"top_creators":[],"notes":""},
+    {"id":"dev-02","keyword":"宽泛赛道乙","category":"broad","rationale":"schema fixture","review_status":"unreviewed","reviewer_count":0,"snapshots":[],"top_creators":[],"notes":""},
+    {"id":"dev-03","keyword":"宽泛赛道丙","category":"broad","rationale":"schema fixture","review_status":"unreviewed","reviewer_count":0,"snapshots":[],"top_creators":[],"notes":""},
+    {"id":"dev-04","keyword":"宽泛赛道丁","category":"broad","rationale":"schema fixture","review_status":"unreviewed","reviewer_count":0,"snapshots":[],"top_creators":[],"notes":""},
+    {"id":"dev-05","keyword":"垂类主题甲","category":"vertical","rationale":"schema fixture","review_status":"unreviewed","reviewer_count":0,"snapshots":[],"top_creators":[],"notes":""},
+    {"id":"dev-06","keyword":"垂类主题乙","category":"vertical","rationale":"schema fixture","review_status":"unreviewed","reviewer_count":0,"snapshots":[],"top_creators":[],"notes":""},
+    {"id":"dev-07","keyword":"垂类主题丙","category":"vertical","rationale":"schema fixture","review_status":"unreviewed","reviewer_count":0,"snapshots":[],"top_creators":[],"notes":""},
+    {"id":"dev-08","keyword":"垂类主题丁","category":"vertical","rationale":"schema fixture","review_status":"unreviewed","reviewer_count":0,"snapshots":[],"top_creators":[],"notes":""},
+    {"id":"dev-09","keyword":"垂类主题戊","category":"vertical","rationale":"schema fixture","review_status":"unreviewed","reviewer_count":0,"snapshots":[],"top_creators":[],"notes":""},
+    {"id":"dev-10","keyword":"垂类主题己","category":"vertical","rationale":"schema fixture","review_status":"unreviewed","reviewer_count":0,"snapshots":[],"top_creators":[],"notes":""},
+    {"id":"dev-11","keyword":"品牌样例甲","category":"brand","rationale":"schema fixture","review_status":"unreviewed","reviewer_count":0,"snapshots":[],"top_creators":[],"notes":""},
+    {"id":"dev-12","keyword":"品牌样例乙","category":"brand","rationale":"schema fixture","review_status":"unreviewed","reviewer_count":0,"snapshots":[],"top_creators":[],"notes":""},
+    {"id":"dev-13","keyword":"品牌样例丙","category":"brand","rationale":"schema fixture","review_status":"unreviewed","reviewer_count":0,"snapshots":[],"top_creators":[],"notes":""},
+    {"id":"dev-14","keyword":"品牌样例丁","category":"brand","rationale":"schema fixture","review_status":"unreviewed","reviewer_count":0,"snapshots":[],"top_creators":[],"notes":""},
+    {"id":"dev-15","keyword":"歧义词甲","category":"ambiguous","rationale":"schema fixture","review_status":"unreviewed","reviewer_count":0,"snapshots":[],"top_creators":[],"notes":""},
+    {"id":"dev-16","keyword":"歧义词乙","category":"ambiguous","rationale":"schema fixture","review_status":"unreviewed","reviewer_count":0,"snapshots":[],"top_creators":[],"notes":""},
+    {"id":"dev-17","keyword":"歧义词丙","category":"ambiguous","rationale":"schema fixture","review_status":"unreviewed","reviewer_count":0,"snapshots":[],"top_creators":[],"notes":""},
+    {"id":"dev-18","keyword":"稀疏主题甲","category":"low_result","rationale":"schema fixture","review_status":"unreviewed","reviewer_count":0,"snapshots":[],"top_creators":[],"notes":""},
+    {"id":"dev-19","keyword":"稀疏主题乙","category":"low_result","rationale":"schema fixture","review_status":"unreviewed","reviewer_count":0,"snapshots":[],"top_creators":[],"notes":""},
+    {"id":"dev-20","keyword":"稀疏主题丙","category":"low_result","rationale":"schema fixture","review_status":"unreviewed","reviewer_count":0,"snapshots":[],"top_creators":[],"notes":""}
+  ]
+}
