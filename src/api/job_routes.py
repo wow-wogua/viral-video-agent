@@ -2,6 +2,7 @@ import uuid
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, Query
+from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import set_committed_value
 
@@ -11,6 +12,9 @@ from src.auth.dependencies import get_current_user
 from src.config import USER_MONTHLY_JOB_LIMIT
 from src.db.models import User
 from src.db.session import get_db
+from src.intelligence.contracts import SearchRequest
+from src.intelligence.providers import ImportSearchProvider, validate_local_filters
+from src.intelligence.snapshots import get_search_snapshot
 from src.queue import JobQueue, get_job_queue
 from src.repositories import JobRepository, ReportRepository
 
@@ -38,7 +42,54 @@ async def create_job(payload: JobCreate, user: User = Depends(get_current_user),
     usage = await ReportRepository(db).usage_summary(user.id, since)
     if usage["jobs_used"] >= USER_MONTHLY_JOB_LIMIT:
         raise AppError(429, "USAGE_LIMIT_REACHED", "本月公开测试用量已用完。")
-    job = await repo.create(user_id=user.id, query=payload.query, platforms=payload.platforms, analysis_mode=payload.analysis_mode, idempotency_key=payload.idempotency_key)
+    try:
+        validate_local_filters(payload.filters)
+    except ValueError as exc:
+        raise AppError(422, "SEARCH_FILTER_INVALID", str(exc)) from exc
+    provider_config: dict = {"kind": payload.search_provider}
+    if payload.search_provider == "import":
+        try:
+            import_provider = (
+                ImportSearchProvider.from_json(payload.import_data)
+                if payload.import_format == "json"
+                else ImportSearchProvider.from_csv(payload.import_data)
+            )
+            request = SearchRequest(
+                keyword=payload.keyword,
+                sort_mode=payload.sort_mode,
+                time_range=payload.time_range,
+                partition=payload.partition,
+                max_pages=payload.max_pages,
+                analysis_mode=payload.analysis_mode,
+                filters=payload.filters,
+                idempotency_key=payload.idempotency_key,
+            )
+            mismatch = import_provider.request_mismatch(request)
+            if mismatch:
+                raise ValueError(mismatch)
+        except (ValueError, TypeError) as exc:
+            if isinstance(exc, ValidationError) and exc.errors():
+                error = exc.errors()[0]
+                location = ".".join(str(item) for item in error.get("loc", ()))
+                detail = f"{location}: {error.get('msg', 'invalid value')}" if location else error.get("msg", "invalid value")
+            else:
+                detail = str(exc)[:240]
+            raise AppError(422, "IMPORT_VALIDATION_FAILED", f"导入快照校验失败：{detail}") from exc
+        provider_config.update({"format": payload.import_format, "data": payload.import_data})
+    job = await repo.create(
+        user_id=user.id,
+        query=payload.query,
+        platforms=payload.platforms,
+        analysis_mode=payload.analysis_mode,
+        idempotency_key=payload.idempotency_key,
+        task_mode=payload.task_mode,
+        keyword=payload.keyword,
+        sort_mode=payload.sort_mode,
+        time_range=payload.time_range,
+        partition=payload.partition,
+        max_pages=payload.max_pages,
+        request_filters={"filters": payload.filters, "provider": provider_config},
+    )
     await repo.add_event(job.id, "queued", "任务已创建，等待后台 Worker。", 0)
     try:
         job.arq_job_id = await queue.enqueue(str(job.id))
@@ -67,6 +118,20 @@ async def get_events(job_id: uuid.UUID, user: User = Depends(get_current_user), 
     await require_job(job_id, user, db)
     events = await JobRepository(db).events(job_id)
     return {"items": [JobEventRead.model_validate(event) for event in events]}
+
+
+@router.get("/{job_id}/search-snapshot", response_model=dict)
+async def get_job_search_snapshot(job_id: uuid.UUID, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    job = await require_job(job_id, user, db)
+    snapshot = await get_search_snapshot(db, job_id)
+    if snapshot is None:
+        raise AppError(404, "SEARCH_SNAPSHOT_NOT_FOUND", "该任务尚无可查询的搜索快照。")
+    snapshot["attempt_state"] = (
+        "previous_attempt"
+        if job.retry_count > 0 and job.status in {"pending", "running"}
+        else "current"
+    )
+    return snapshot
 
 
 @router.post("/{job_id}/cancel", response_model=JobRead)

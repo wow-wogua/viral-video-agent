@@ -23,8 +23,36 @@ class JobRepository:
     async def get(self, job_id: uuid.UUID) -> AnalysisJob | None: return await self.db.get(AnalysisJob, job_id)
     async def get_by_idempotency(self, user_id: uuid.UUID, key: str) -> AnalysisJob | None:
         return await self.db.scalar(select(AnalysisJob).options(selectinload(AnalysisJob.reports)).where(AnalysisJob.user_id == user_id, AnalysisJob.idempotency_key == key))
-    async def create(self, *, user_id: uuid.UUID, query: str, platforms: list[str], analysis_mode: str, idempotency_key: str) -> AnalysisJob:
-        job = AnalysisJob(user_id=user_id, query=query, platforms=platforms, analysis_mode=analysis_mode, idempotency_key=idempotency_key)
+    async def create(
+        self,
+        *,
+        user_id: uuid.UUID,
+        query: str,
+        platforms: list[str],
+        analysis_mode: str,
+        idempotency_key: str,
+        task_mode: str = "legacy",
+        keyword: str | None = None,
+        sort_mode: str = "relevance",
+        time_range: str = "all",
+        partition: str | None = None,
+        max_pages: int = 1,
+        request_filters: dict | None = None,
+    ) -> AnalysisJob:
+        job = AnalysisJob(
+            user_id=user_id,
+            query=query,
+            platforms=platforms,
+            analysis_mode=analysis_mode,
+            idempotency_key=idempotency_key,
+            task_mode=task_mode,
+            keyword=keyword,
+            sort_mode=sort_mode,
+            time_range=time_range,
+            partition=partition,
+            max_pages=max_pages,
+            request_filters=request_filters or {},
+        )
         job.reports = []
         self.db.add(job)
         await self.db.commit()

@@ -1,0 +1,46 @@
+{
+  "code": 0,
+  "message": "0",
+  "data": {
+    "result": [
+      {
+        "bvid": "BV0000000001",
+        "aid": 1,
+        "title": "<em class=\"keyword\">脱敏</em>视频一",
+        "author": "脱敏创作者甲",
+        "mid": 1001,
+        "description": "固定响应样例",
+        "typename": "知识",
+        "pubdate": 1784073600,
+        "duration": "01:30",
+        "pic": "//example.test/1.jpg",
+        "play": 100,
+        "favorites": 8,
+        "review": 3,
+        "video_review": 4,
+        "arcurl": "https://www.bilibili.com/video/BV0000000001"
+      },
+      {
+        "bvid": "BV0000000002",
+        "aid": 2,
+        "title": "脱敏视频二",
+        "author": "脱敏创作者甲",
+        "mid": 1001,
+        "typename": "知识",
+        "pubdate": 1783987200,
+        "duration": "02:00",
+        "play": 200,
+        "arcurl": "https://www.bilibili.com/video/BV0000000002"
+      },
+      {
+        "bvid": "BV0000000003",
+        "aid": 3,
+        "title": "脱敏无MID视频",
+        "author": "",
+        "duration": "00:45",
+        "play": 50,
+        "arcurl": "https://www.bilibili.com/video/BV0000000003"
+      }
+    ]
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "code": 0,
+  "message": "0",
+  "data": {
+    "result": [
+      {
+        "bvid": "BV0000000002",
+        "aid": 2,
+        "title": "脱敏视频二重复",
+        "author": "脱敏创作者甲",
+        "mid": 1001,
+        "duration": "02:00",
+        "play": 210,
+        "arcurl": "https://www.bilibili.com/video/BV0000000002"
+      },
+      {
+        "bvid": "BV0000000004",
+        "aid": 4,
+        "title": "脱敏视频四",
+        "author": "脱敏创作者乙",
+        "mid": 2002,
+        "duration": "03:00",
+        "play": 400,
+        "arcurl": "https://www.bilibili.com/video/BV0000000004"
+      }
+    ]
+  }
+}

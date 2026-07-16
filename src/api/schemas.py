@@ -1,8 +1,8 @@
 import uuid
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 
 
 class UserCreate(BaseModel):
@@ -22,6 +22,16 @@ class JobCreate(BaseModel):
     query: str = Field(min_length=3, max_length=2000)
     platforms: list[str] = Field(default_factory=lambda: ["bilibili"])
     analysis_mode: Literal["standard", "deep"] = "standard"
+    task_mode: Literal["legacy", "content_intelligence"] = "legacy"
+    keyword: str | None = Field(default=None, min_length=1, max_length=200)
+    sort_mode: Literal["relevance", "newest", "most_viewed"] = "relevance"
+    time_range: Literal["all", "day", "week", "month", "quarter", "year"] = "all"
+    partition: str | None = Field(default=None, max_length=80)
+    max_pages: int | None = Field(default=None, ge=1, le=5)
+    filters: dict[str, Any] = Field(default_factory=dict)
+    search_provider: Literal["development", "import"] = "development"
+    import_format: Literal["json", "csv"] | None = None
+    import_data: dict[str, Any] | str | None = None
     idempotency_key: str = Field(min_length=8, max_length=128)
 
     @field_validator("platforms")
@@ -30,6 +40,29 @@ class JobCreate(BaseModel):
         if value != ["bilibili"]:
             raise ValueError("only bilibili is supported")
         return value
+
+    @model_validator(mode="after")
+    def validate_task_mode(self) -> "JobCreate":
+        if self.max_pages is None:
+            self.max_pages = 5 if self.task_mode == "content_intelligence" else 1
+        if self.task_mode == "legacy":
+            if self.search_provider != "development" or self.import_data is not None or self.import_format is not None:
+                raise ValueError("legacy jobs do not accept search provider imports")
+            return self
+        if not self.keyword:
+            raise ValueError("content_intelligence jobs require keyword")
+        if self.analysis_mode != "standard":
+            raise ValueError("P0-B content_intelligence jobs do not enable ASR")
+        if self.search_provider == "import":
+            if self.import_format is None or self.import_data is None:
+                raise ValueError("import jobs require import_format and import_data")
+            if self.import_format == "json" and not isinstance(self.import_data, (dict, str)):
+                raise ValueError("JSON import_data must be an object or JSON string")
+            if self.import_format == "csv" and not isinstance(self.import_data, str):
+                raise ValueError("CSV import_data must be text")
+        elif self.import_format is not None or self.import_data is not None:
+            raise ValueError("development provider does not accept import data")
+        return self
 
 
 class JobEventRead(BaseModel):
@@ -47,6 +80,12 @@ class JobRead(BaseModel):
     query: str
     platforms: list[str]
     analysis_mode: str
+    task_mode: str
+    keyword: str | None
+    sort_mode: str
+    time_range: str
+    partition: str | None
+    max_pages: int
     status: str
     progress: int
     retry_count: int

@@ -95,6 +95,8 @@ Compose 包含 8 个服务：`frontend`、`app`、`worker`、`postgres`、`redis
 
 - [产品架构与任务流](docs/product-mvp.md)
 - [LangGraph v2 Agent 架构与 A/B](docs/architecture-v2-plan.md)
+- [P0-B Search Provider 与搜索快照](docs/content-intelligence-search-providers.md)
+- [2026-07-16 P0-B 验证记录](docs/content-intelligence-p0b-validation-20260716.md)
 - [权限、数据与 Evidence 边界](docs/security-and-data.md)
 - [2026-07-13 验收记录](docs/validation-20260713.md)
 
@@ -175,6 +177,7 @@ GET    /jobs/{job_id}
 POST   /jobs/{job_id}/cancel
 POST   /jobs/{job_id}/retry
 GET    /jobs/{job_id}/events
+GET    /jobs/{job_id}/search-snapshot
 GET    /reports/{report_id}
 POST   /reports/{report_id}/shares
 POST   /reports/{report_id}/feedback
@@ -183,6 +186,8 @@ POST   /reports/{report_id}/feedback
 状态：`pending`、`running`、`completed`、`partial`、`failed`、`cancelled`。
 
 Redis 只保存队列、临时状态、事件和缓存；长期业务事实全部进入 PostgreSQL。
+
+`task_mode=content_intelligence` 是 P0-B 搜索快照入口：支持最多 5 页 Development/Import Provider、逐页状态和 BVID/MID 去重，但本阶段不生成 Top 5 竞品或情报报告。未传 `task_mode` 的现有请求继续走旧分析路径。
 
 ## Evidence 引用
 

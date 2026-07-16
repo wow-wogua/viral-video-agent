@@ -1,5 +1,6 @@
 import uuid
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 import pytest
 import pytest_asyncio
@@ -9,6 +10,10 @@ from sqlalchemy.pool import StaticPool
 
 from src.db.models import AnalysisJob, EvidenceItem, Report, ShareLink, UsageRecord, User
 from src.db.session import Base, get_db
+from src.intelligence.contracts import SearchRequest
+from src.intelligence.providers import FixtureSearchProvider
+from src.intelligence.search_service import execute_search_snapshot
+from src.intelligence.snapshots import persist_search_snapshot
 from src.main import app
 from src.queue import get_job_queue
 
@@ -73,6 +78,88 @@ async def test_job_creation_is_idempotent_and_cancellable(api_client):
     assert first.json()["id"] == second.json()["id"]
     cancelled = await client.post(f"/jobs/{first.json()['id']}/cancel")
     assert cancelled.json()["status"] == "cancelled"
+
+
+@pytest.mark.asyncio
+async def test_content_intelligence_job_accepts_p0b_search_inputs(api_client):
+    client, session_factory = api_client
+    await register(client, "snapshot@example.com")
+    payload = {
+        "query": "建立B站脱敏关键词当前搜索快照",
+        "platforms": ["bilibili"],
+        "analysis_mode": "standard",
+        "task_mode": "content_intelligence",
+        "keyword": "脱敏关键词",
+        "sort_mode": "newest",
+        "time_range": "month",
+        "partition": "知识",
+        "max_pages": 5,
+        "filters": {"min_view": 100},
+        "search_provider": "development",
+        "idempotency_key": "snapshot-api-123",
+    }
+    response = await client.post("/jobs", json=payload)
+    assert response.status_code == 202, response.text
+    body = response.json()
+    assert body["task_mode"] == "content_intelligence"
+    assert body["keyword"] == "脱敏关键词"
+    assert body["max_pages"] == 5
+    async with session_factory() as db:
+        job = await db.get(AnalysisJob, uuid.UUID(body["id"]))
+        assert job.request_filters["filters"] == {"min_view": 100}
+        assert job.request_filters["provider"] == {"kind": "development"}
+
+
+@pytest.mark.asyncio
+async def test_import_job_is_strictly_validated_before_enqueue(api_client):
+    client, _ = api_client
+    await register(client, "invalid-import@example.com")
+    response = await client.post("/jobs", json={
+        "query": "导入B站公开搜索快照",
+        "platforms": ["bilibili"],
+        "analysis_mode": "standard",
+        "task_mode": "content_intelligence",
+        "keyword": "脱敏关键词",
+        "max_pages": 1,
+        "search_provider": "import",
+        "import_format": "json",
+        "import_data": {"unknown": "payload"},
+        "idempotency_key": "invalid-import-123",
+    })
+    assert response.status_code == 422
+    assert response.json()["error_code"] == "IMPORT_VALIDATION_FAILED"
+    assert "payload" not in response.json()["message"]
+
+
+@pytest.mark.asyncio
+async def test_owned_search_snapshot_is_queryable(api_client):
+    client, session_factory = api_client
+    await register(client, "snapshot-query@example.com")
+    created = await client.post("/jobs", json={
+        "query": "建立B站脱敏关键词当前搜索快照",
+        "platforms": ["bilibili"],
+        "analysis_mode": "standard",
+        "task_mode": "content_intelligence",
+        "keyword": "脱敏关键词",
+        "max_pages": 2,
+        "search_provider": "development",
+        "idempotency_key": "snapshot-query-123",
+    })
+    job_id = uuid.UUID(created.json()["id"])
+    fixture_path = Path(__file__).parent / "fixtures" / "search_provider" / "import_snapshot.json"
+    provider = FixtureSearchProvider.from_json(fixture_path.read_text(encoding="utf-8"))
+    bundle = await execute_search_snapshot(
+        provider,
+        SearchRequest(keyword="脱敏关键词", max_pages=2, idempotency_key="snapshot-query-contract"),
+    )
+    async with session_factory() as db:
+        await persist_search_snapshot(db, job_id, bundle)
+        await db.commit()
+    response = await client.get(f"/jobs/{job_id}/search-snapshot")
+    assert response.status_code == 200, response.text
+    assert response.json()["coverage"]["successful_pages"] == 2
+    assert [page["status"] for page in response.json()["pages"]] == ["success", "empty"]
+    assert response.json()["attempt_state"] == "current"
 
 
 @pytest.mark.asyncio

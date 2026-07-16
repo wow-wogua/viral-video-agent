@@ -4,16 +4,21 @@ from datetime import datetime, timezone
 
 from arq import Retry
 from arq.connections import RedisSettings
+from sqlalchemy import select
 
 from src.api.errors import ERROR_MESSAGES
 from src.config import ASR_MAX_VIDEOS, ASR_MAX_VIDEO_SECONDS, DEFAULT_LLM_MODEL_ID, DEFAULT_LLM_PROVIDER, JOB_MAX_RETRIES, JOB_TIMEOUT_SECONDS, REDIS_URL, WORKER_MAX_JOBS
-from src.db.models import EvidenceItem, Report, UsageRecord
+from src.db.models import CrawlRun as CrawlRunRecord, EvidenceItem, Report, UsageRecord
 from src.db.session import async_session_factory
 from src.gateway.cost_tracker import cost_tracker
 from src.agents.analyst import analyst_node
 from src.agents.writer import writer_node
 from src.graph.builder import build_graph
 from src.graph.v2 import stable_evidence_id
+from src.intelligence.contracts import CrawlStatus, SearchRequest
+from src.intelligence.providers import BilibiliDevelopmentSearchProvider, ImportSearchProvider
+from src.intelligence.search_service import execute_search_snapshot
+from src.intelligence.snapshots import persist_search_snapshot
 from src.reporting.validation import finalize_report, validate_claims, validate_report_references
 from src.repositories import JobRepository
 from src.utils.fallback_counter import fallback_counter
@@ -61,6 +66,110 @@ async def _invoke_graph(job_id: uuid.UUID, user_id: uuid.UUID, query: str, platf
                 task.cancel()
                 raise asyncio.CancelledError
     return await task
+
+
+async def _job_cancelled(job_id: uuid.UUID) -> bool:
+    async with async_session_factory() as db:
+        job = await JobRepository(db).get(job_id)
+        return not job or job.status == "cancelled"
+
+
+def _search_provider_for_job(job):
+    config = (job.request_filters or {}).get("provider", {})
+    kind = config.get("kind", "development")
+    if kind == "development":
+        return BilibiliDevelopmentSearchProvider()
+    if kind == "import":
+        if config.get("format") == "json":
+            return ImportSearchProvider.from_json(config.get("data"))
+        if config.get("format") == "csv":
+            return ImportSearchProvider.from_csv(config.get("data") or "")
+        raise ValueError("import provider format is missing")
+    raise ValueError(f"unsupported search provider: {kind}")
+
+
+async def _run_content_intelligence_job(job_id: uuid.UUID, redis=None) -> None:
+    async with async_session_factory() as db:
+        job = await JobRepository(db).get(job_id)
+        if not job or job.status == "cancelled":
+            return
+        provider = _search_provider_for_job(job)
+        request = SearchRequest(
+            keyword=job.keyword or job.query,
+            sort_mode=job.sort_mode,
+            time_range=job.time_range,
+            partition=job.partition,
+            max_pages=job.max_pages,
+            analysis_mode=job.analysis_mode,
+            filters=(job.request_filters or {}).get("filters", {}),
+            idempotency_key=job.idempotency_key,
+        )
+        existing_run = await db.scalar(select(CrawlRunRecord).where(CrawlRunRecord.job_id == job_id))
+        crawl_run_id = str(existing_run.id) if existing_run else None
+
+    await _event(job_id, "collecting", f"正在建立最多 {request.max_pages} 页的B站当前搜索快照。", 15, redis=redis)
+    try:
+        bundle = await execute_search_snapshot(
+            provider,
+            request,
+            crawl_run_id=crawl_run_id,
+            cancel_check=lambda: _job_cancelled(job_id),
+        )
+    finally:
+        await provider.close()
+
+    await _event(job_id, "persisting", "正在保存逐页状态、去重视频和候选账号。", 85, redis=redis)
+    async with async_session_factory() as db:
+        repo = JobRepository(db)
+        job = await repo.get(job_id)
+        if not job:
+            return
+        await persist_search_snapshot(db, job_id, bundle)
+        completed_at = datetime.now(timezone.utc)
+        provider_kind = bundle.crawl_run.provider.provider_kind
+        if job.status == "cancelled" or bundle.crawl_run.status == CrawlStatus.CANCELLED:
+            job.status = "cancelled"
+            job.error_code = "JOB_CANCELLED"
+            job.error_message = ERROR_MESSAGES["JOB_CANCELLED"]
+        elif bundle.crawl_run.status == CrawlStatus.SUCCESS:
+            job.status = "completed"
+            job.error_code = None
+            job.error_message = None
+        elif bundle.crawl_run.status == CrawlStatus.PARTIAL:
+            job.status = "partial"
+            job.error_code = "SEARCH_PARTIAL"
+            job.error_message = ERROR_MESSAGES["SEARCH_PARTIAL"]
+        elif bundle.crawl_run.status == CrawlStatus.EMPTY:
+            job.status = "partial"
+            job.error_code = "NO_VIDEO_RESULTS"
+            job.error_message = ERROR_MESSAGES["NO_VIDEO_RESULTS"]
+        else:
+            job.status = "failed"
+            job.error_code = "BILIBILI_UNAVAILABLE" if provider_kind == "development" else "WORKER_FAILED"
+            job.error_message = ERROR_MESSAGES[job.error_code]
+        job.progress = 100
+        job.completed_at = completed_at
+        if provider_kind == "import" and job.status == "completed":
+            request_filters = dict(job.request_filters or {})
+            provider_config = dict(request_filters.get("provider", {}))
+            import_data = provider_config.pop("data", None)
+            if import_data is not None:
+                import hashlib
+                import json
+                serialized = json.dumps(import_data, ensure_ascii=False, sort_keys=True, default=str)
+                provider_config["payload_sha256"] = hashlib.sha256(serialized.encode("utf-8")).hexdigest()
+            request_filters["provider"] = provider_config
+            job.request_filters = request_filters
+        await db.commit()
+
+    final_event = {
+        CrawlStatus.SUCCESS: ("completed", "搜索快照已完成；P0-B未生成竞品排名或情报报告。", "info"),
+        CrawlStatus.PARTIAL: ("partial", "搜索快照部分成功，请查看逐页错误和覆盖说明。", "warning"),
+        CrawlStatus.EMPTY: ("partial", "所有请求页均成功但没有规范化视频。", "warning"),
+        CrawlStatus.FAILED: ("failed", "没有成功响应页，已保存失败状态。", "error"),
+        CrawlStatus.CANCELLED: ("cancelled", "搜索快照已取消。", "warning"),
+    }[bundle.crawl_run.status]
+    await _event(job_id, final_event[0], final_event[1], 100, final_event[2], redis)
 
 
 async def _enrich_deep_analysis(result: dict, job_id: uuid.UUID, redis=None) -> dict:
@@ -139,9 +248,13 @@ async def run_analysis_job(ctx: dict, job_id_value: str) -> None:
         if not job or job.status == "cancelled": return
         job.status, job.started_at, job.error_code, job.error_message = "running", datetime.now(timezone.utc), None, None
         await repo.save(job)
-        user_id, query, platforms, retry_count, analysis_mode = job.user_id, job.query, job.platforms, job.retry_count, job.analysis_mode
+        user_id, query, platforms, retry_count, analysis_mode, task_mode = job.user_id, job.query, job.platforms, job.retry_count, job.analysis_mode, job.task_mode
     cost_tracker.reset(); fallback_counter.reset(); trace_tracker.reset()
     try:
+        if task_mode == "content_intelligence":
+            async with ctx["provider_semaphore"]:
+                await asyncio.wait_for(_run_content_intelligence_job(job_id, redis), timeout=JOB_TIMEOUT_SECONDS)
+            return
         await _event(job_id, "collecting", "正在采集B站数据并检索知识库。", 15, redis=redis)
         async with ctx["provider_semaphore"]:
             result = await asyncio.wait_for(_invoke_graph(job_id, user_id, query, platforms), timeout=JOB_TIMEOUT_SECONDS)

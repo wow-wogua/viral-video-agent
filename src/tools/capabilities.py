@@ -66,7 +66,7 @@ def get_tool_capabilities() -> dict[str, ToolCapability]:
     return {
         "search_videos": ToolCapability(
             name="search_videos",
-            description="搜索B站当前/近期热门视频样本，单次最多20条",
+            description="读取B站当前公开搜索快照的第一页，单次最多20条",
             params_model=SearchVideosParams,
             enabled=True,
             availability="real",

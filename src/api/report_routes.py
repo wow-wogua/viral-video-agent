@@ -13,6 +13,7 @@ from src.config import USER_MONTHLY_JOB_LIMIT
 from src.db.models import Report, User
 from src.db.session import get_db
 from src.repositories import ReportRepository
+from src.intelligence.providers import provider_capability_catalog
 from src.tools.capabilities import capability_snapshot
 
 router = APIRouter(tags=["reports"])
@@ -20,7 +21,11 @@ router = APIRouter(tags=["reports"])
 
 @router.get("/capabilities", response_model=dict)
 async def capabilities():
-    return {"items": capability_snapshot(), "platforms": ["bilibili"]}
+    return {
+        "items": capability_snapshot(),
+        "platforms": ["bilibili"],
+        "search_providers": provider_capability_catalog(),
+    }
 
 
 def serialize_report(report: Report, usage=None, public: bool = False) -> ReportRead:

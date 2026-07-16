@@ -1,0 +1,41 @@
+{
+  "schema_version": "search-import.p0.1",
+  "source_name": "sanitized-json-fixture",
+  "provider_version": "fixture-import-1",
+  "snapshot_at": "2026-07-16T00:00:00+00:00",
+  "keyword": "脱敏关键词",
+  "sort_mode": "relevance",
+  "time_range": "all",
+  "partition": null,
+  "pages": [
+    {
+      "page_number": 1,
+      "status": "success",
+      "source_url": "https://example.test/search?page=1",
+      "results": [
+        {
+          "bvid": "BV1000000001",
+          "title": "导入视频一",
+          "source_url": "https://www.bilibili.com/video/BV1000000001",
+          "creator_mid": "3003",
+          "creator_name": "导入创作者",
+          "view": 100
+        },
+        {
+          "bvid": "BV1000000002",
+          "title": "导入视频二",
+          "source_url": "https://www.bilibili.com/video/BV1000000002",
+          "creator_mid": null,
+          "creator_name": null,
+          "view": null
+        }
+      ]
+    },
+    {
+      "page_number": 2,
+      "status": "empty",
+      "source_url": "https://example.test/search?page=2",
+      "results": []
+    }
+  ]
+}

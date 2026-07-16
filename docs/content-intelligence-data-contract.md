@@ -54,3 +54,7 @@
 - 人工补充账号默认是 `discovery_only`；只有通过版本化账号资格政策后才成为 `qualified_reference` 或 retrieval miss。
 - `discovery_only` 和 `emerging_candidate` 不进入 Retrieval Recall 分母，也不能伪装成系统召回或合格 Top 5。
 - 检索池中的 `TopCreatorLabel` 同样保存账号资格状态和证据；`qualified_top5_count` 必须等于真实 `qualified_reference` 数量，不能用搜索片段上的 `keep` 数量代替。
+
+## P0-B 实现
+
+Search Provider、分页编排、Import Provider、规范化、去重、数据库快照和 API/Worker 接入见 [P0-B Search Provider 与搜索快照](content-intelligence-search-providers.md)。P0-B 成功只表示搜索快照完成；`actual_competitor_count` 仍为 0，不代表 Top 5、代表视频或情报报告已经实现。
