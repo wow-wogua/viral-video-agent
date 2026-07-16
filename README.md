@@ -187,7 +187,7 @@ POST   /reports/{report_id}/feedback
 
 Redis 只保存队列、临时状态、事件和缓存；长期业务事实全部进入 PostgreSQL。
 
-`task_mode=content_intelligence` 是 P0-B 搜索快照入口：支持最多 5 页 Development/Import Provider、逐页状态和 BVID/MID 去重，但本阶段不生成 Top 5 竞品或情报报告。未传 `task_mode` 的现有请求继续走旧分析路径。
+`task_mode=content_intelligence` 是 P0-B 搜索快照入口：支持最多 5 页 Development/Import Provider、逐页状态、BVID/MID 去重和按 crawl run 冻结的视频/创作者观测；历史快照不从全局最新实体回读。本阶段不生成 Top 5 竞品或情报报告。未传 `task_mode` 的现有请求继续走旧分析路径。
 
 ## Evidence 引用
 

@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.db.models import (
     CrawlRun,
+    CrawlRunCreatorObservation,
     CrawlRunVideo,
     CreatorRecord,
     SearchPageRecord,
@@ -93,6 +94,7 @@ async def persist_search_snapshot(
         run = CrawlRun(id=uuid.UUID(contract.crawl_run_id), job_id=job_id)
         db.add(run)
     else:
+        await db.execute(delete(CrawlRunCreatorObservation).where(CrawlRunCreatorObservation.crawl_run_id == run.id))
         await db.execute(delete(CrawlRunVideo).where(CrawlRunVideo.crawl_run_id == run.id))
         await db.execute(delete(SearchPageRecord).where(SearchPageRecord.crawl_run_id == run.id))
 
@@ -142,12 +144,49 @@ async def persist_search_snapshot(
             error_code=page.error_code,
             error_summary=page.error_summary,
         ))
+    for creator in bundle.creators:
+        db.add(CrawlRunCreatorObservation(
+            crawl_run_id=run.id,
+            mid=creator.mid,
+            name=creator.name,
+            profile_url=creator.profile_url,
+            avatar_url=creator.avatar_url,
+            follower_count=creator.follower_count,
+            observed_at=creator.observed_at,
+            provider_name=creator.provider_name,
+            provider_version=creator.provider_version,
+            recent_sample_availability=creator.recent_sample_availability.value,
+            recent_sample_count=creator.recent_sample_count,
+            missing_reason=creator.missing_reason,
+        ))
     for video in bundle.videos:
         db.add(CrawlRunVideo(
             crawl_run_id=run.id,
             bvid=video.bvid,
             page_number=video.source_page,
             result_rank=video.source_rank,
+            aid=video.aid,
+            creator_mid=video.creator_mid,
+            creator_name=video.creator_name,
+            title=video.title,
+            description=video.description,
+            tags=video.tags,
+            partition=video.partition,
+            published_at=video.published_at,
+            duration_seconds=video.duration_seconds,
+            cover_url=video.cover_url,
+            source_url=video.source_url,
+            view=video.view,
+            like=video.like,
+            coin=video.coin,
+            favorite=video.favorite,
+            reply=video.reply,
+            share=video.share,
+            danmaku=video.danmaku,
+            observed_at=video.observed_at,
+            provider_name=video.provider_name,
+            provider_version=video.provider_version,
+            missing_fields=video.missing_fields,
             relevance_label="uncertain",
             relevance_evidence_ids=[],
             raw_payload_hash=video.raw_payload_hash,
@@ -165,18 +204,16 @@ async def get_search_snapshot(db: AsyncSession, job_id: uuid.UUID) -> dict[str, 
         .where(SearchPageRecord.crawl_run_id == run.id)
         .order_by(SearchPageRecord.page_number)
     )).all())
-    rows = (await db.execute(
-        select(CrawlRunVideo, VideoRecord)
-        .join(VideoRecord, VideoRecord.bvid == CrawlRunVideo.bvid)
+    videos = list((await db.scalars(
+        select(CrawlRunVideo)
         .where(CrawlRunVideo.crawl_run_id == run.id)
         .order_by(CrawlRunVideo.page_number, CrawlRunVideo.result_rank)
-    )).all()
-    creator_mids = sorted({video.creator_mid for _, video in rows if video.creator_mid})
-    creators = []
-    if creator_mids:
-        creators = list((await db.scalars(
-            select(CreatorRecord).where(CreatorRecord.mid.in_(creator_mids)).order_by(CreatorRecord.mid)
-        )).all())
+    )).all())
+    creators = list((await db.scalars(
+        select(CrawlRunCreatorObservation)
+        .where(CrawlRunCreatorObservation.crawl_run_id == run.id)
+        .order_by(CrawlRunCreatorObservation.mid)
+    )).all())
     return {
         "crawl_run_id": run.id,
         "schema_version": run.schema_version,
@@ -211,33 +248,33 @@ async def get_search_snapshot(db: AsyncSession, job_id: uuid.UUID) -> dict[str, 
             "error_summary": page.error_summary,
         } for page in pages],
         "videos": [{
-            "bvid": video.bvid,
-            "aid": video.aid,
-            "creator_mid": video.creator_mid,
-            "creator_name": video.creator_name,
-            "title": video.title,
-            "description": video.description,
-            "tags": video.tags,
-            "partition": video.partition,
-            "published_at": video.published_at,
-            "duration_seconds": video.duration_seconds,
-            "cover_url": video.cover_url,
-            "source_url": video.source_url,
-            "view": video.view,
-            "like": video.like,
-            "coin": video.coin,
-            "favorite": video.favorite,
-            "reply": video.reply,
-            "share": video.share,
-            "danmaku": video.danmaku,
-            "observed_at": video.observed_at,
-            "provider_name": video.provider_name,
-            "provider_version": video.provider_version,
-            "missing_fields": video.missing_fields,
-            "source_page": link.page_number,
-            "source_rank": link.result_rank,
-            "raw_payload_hash": link.raw_payload_hash,
-        } for link, video in rows],
+            "bvid": observation.bvid,
+            "aid": observation.aid,
+            "creator_mid": observation.creator_mid,
+            "creator_name": observation.creator_name,
+            "title": observation.title,
+            "description": observation.description,
+            "tags": observation.tags,
+            "partition": observation.partition,
+            "published_at": observation.published_at,
+            "duration_seconds": observation.duration_seconds,
+            "cover_url": observation.cover_url,
+            "source_url": observation.source_url,
+            "view": observation.view,
+            "like": observation.like,
+            "coin": observation.coin,
+            "favorite": observation.favorite,
+            "reply": observation.reply,
+            "share": observation.share,
+            "danmaku": observation.danmaku,
+            "observed_at": observation.observed_at,
+            "provider_name": observation.provider_name,
+            "provider_version": observation.provider_version,
+            "missing_fields": observation.missing_fields,
+            "source_page": observation.page_number,
+            "source_rank": observation.result_rank,
+            "raw_payload_hash": observation.raw_payload_hash,
+        } for observation in videos],
         "creators": [{
             "mid": creator.mid,
             "name": creator.name,

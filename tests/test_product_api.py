@@ -160,6 +160,14 @@ async def test_owned_search_snapshot_is_queryable(api_client):
     assert response.json()["coverage"]["successful_pages"] == 2
     assert [page["status"] for page in response.json()["pages"]] == ["success", "empty"]
     assert response.json()["attempt_state"] == "current"
+    async with session_factory() as db:
+        job = await db.get(AnalysisJob, job_id)
+        job.retry_count = 1
+        job.status = "pending"
+        await db.commit()
+    retry_response = await client.get(f"/jobs/{job_id}/search-snapshot")
+    assert retry_response.status_code == 200
+    assert retry_response.json()["attempt_state"] == "previous_attempt"
 
 
 @pytest.mark.asyncio

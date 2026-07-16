@@ -57,4 +57,4 @@
 
 ## P0-B 实现
 
-Search Provider、分页编排、Import Provider、规范化、去重、数据库快照和 API/Worker 接入见 [P0-B Search Provider 与搜索快照](content-intelligence-search-providers.md)。P0-B 成功只表示搜索快照完成；`actual_competitor_count` 仍为 0，不代表 Top 5、代表视频或情报报告已经实现。
+Search Provider、分页编排、Import Provider、规范化、去重、per-crawl-run 不可变 observation、数据库快照和 API/Worker 接入见 [P0-B Search Provider 与搜索快照](content-intelligence-search-providers.md)。全局 BVID/MID 实体保存最新归一化状态，历史 API 只读取目标 crawl run 的冻结视频/创作者观测。P0-B 成功只表示搜索快照完成；`actual_competitor_count` 仍为 0，不代表 Top 5、代表视频或情报报告已经实现。
