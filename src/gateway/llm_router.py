@@ -56,7 +56,7 @@ def _build_openai_compatible(
 # Analyst 必须返回可解析的结构化 JSON。真实 MiMo 冒烟中 thinking 模式可能只返回
 # thinking block 而没有 text block，因此产品主链路统一要求文本输出。
 _THINKING_AGENTS: set[str] = set()
-_AGENT_MAX_TOKENS = {"analyst": 2048, "writer": 2048}
+_AGENT_MAX_TOKENS = {"analyst": 2048, "writer": 2048, "competitor_relevance": 4096}
 
 def get_llm(agent_name: str = "default", temperature: float | None = None):
     """获取 LLM 实例。优先查 ModelRegistry，没有则用默认模型。"""

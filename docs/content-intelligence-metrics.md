@@ -37,3 +37,5 @@
 竞品评分用于选择 Top 5，指标用于解释已选竞品，两者不可混写。评分权重版本为 `competitor-score.p0.1`，LLM 只允许输出语义相关性标签；候选数量、活跃度、互动、扣分、总分和排序由程序计算。
 
 评测中的 Retrieval Recall 只以账号级 `qualified_reference` 为分母。搜索视频相关、`discovery_only` 和 `emerging_candidate` 只用于发现与诊断，不计入 Recall。
+
+P0-C 分项评分与上述解释指标分开保存；互动评分使用当前可观测字段 `(like+favorite+reply+danmaku)/view` 的中位数代理，字段不完整的视频不进入评分样本，同时产生缺失惩罚。它不是完整互动率指标，也不得替代后续报告指标。完整权重和缺失规则见 [P0-C Creator Provider、竞品相关性与 Top 5](content-intelligence-competitor-scoring.md)。

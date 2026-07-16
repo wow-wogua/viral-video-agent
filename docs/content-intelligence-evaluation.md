@@ -68,3 +68,9 @@
 - 完整关键词、人工参考集和隐藏 holdout 只保存在仓库外。
 - 业务代码不得包含评测账号、MID或关键词特判。
 - 定向人工搜索只用于建立参考集，不改变原始 SearchRequest 的候选快照。
+
+## P0-C 冻结统计
+
+`competitor-evaluation.p0.1` 同时报告 selected precision、strict Precision@5、不相关账号误判率、unresolved selection rate、输出覆盖、Retrieval Recall、类别统计和 abstention。少于5个输出时，strict Precision@5 的分母为 `min(5, 当前检索池中 qualified_reference 数)`，空槽位不能被隐藏；没有 qualified 槽位时该指标为 null，并保留 0 输出事实。完整公式见 [P0-C Creator Provider、竞品相关性与 Top 5](content-intelligence-competitor-scoring.md)。
+
+当前私有文件为 1 名真实人工复核，`reviewer_count=1`，没有标注者一致性证据。模型、程序校验或聊天协助不得计作第二名人工。

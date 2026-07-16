@@ -1,0 +1,58 @@
+{
+  "schema_version": "creator-import.p0.1",
+  "source_name": "sanitized-public-page-capture",
+  "provider_version": "sanitized-source.p0-c.1",
+  "creators": [
+    {
+      "creator_mid": "90001",
+      "creator_name": "sanitized-specialist",
+      "profile_url": "https://example.test/creator/90001",
+      "status": "success",
+      "observed_at": "2026-07-16T12:00:00Z",
+      "source_url": "https://example.test/creator/90001/uploads",
+      "source_provider_name": "public-page-capture",
+      "source_provider_version": "capture-v1",
+      "follower_count": 20000,
+      "uploads": [
+        {
+          "bvid": "BV1000000101",
+          "title": "sanitized relevant upload one",
+          "source_url": "https://www.bilibili.com/video/BV1000000101",
+          "description": "sanitized description",
+          "tags": ["sanitized", "topic"],
+          "published_at": "2026-07-10T12:00:00Z",
+          "view": 12000,
+          "like": 500,
+          "favorite": 200,
+          "reply": 80,
+          "danmaku": 40,
+          "missing_fields": ["coin", "share"]
+        },
+        {
+          "bvid": "BV1000000102",
+          "title": "sanitized relevant upload two",
+          "source_url": "https://www.bilibili.com/video/BV1000000102",
+          "published_at": "2026-06-25T12:00:00Z",
+          "view": 9000,
+          "like": 300,
+          "favorite": 120,
+          "reply": 60,
+          "danmaku": 30,
+          "missing_fields": ["coin", "share"]
+        },
+        {
+          "bvid": "BV1000000103",
+          "title": "sanitized relevant upload three",
+          "source_url": "https://www.bilibili.com/video/BV1000000103",
+          "published_at": "2026-05-20T12:00:00Z",
+          "view": 7000,
+          "like": 250,
+          "favorite": 100,
+          "reply": 40,
+          "danmaku": 20,
+          "missing_fields": ["coin", "share"]
+        }
+      ]
+    }
+  ]
+}

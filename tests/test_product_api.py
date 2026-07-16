@@ -8,7 +8,7 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
-from src.db.models import AnalysisJob, EvidenceItem, Report, ShareLink, UsageRecord, User
+from src.db.models import AnalysisJob, CompetitorScoreRecord, CrawlRun, CreatorRecord, EvidenceItem, Report, ShareLink, UsageRecord, User
 from src.db.session import Base, get_db
 from src.intelligence.contracts import SearchRequest
 from src.intelligence.providers import FixtureSearchProvider
@@ -132,6 +132,28 @@ async def test_import_job_is_strictly_validated_before_enqueue(api_client):
 
 
 @pytest.mark.asyncio
+async def test_p0c_creator_import_is_strictly_validated_before_enqueue(api_client):
+    client, _ = api_client
+    await register(client, "invalid-creator-import@example.com")
+    response = await client.post("/jobs", json={
+        "query": "重放B站公开快照并审计账号",
+        "platforms": ["bilibili"],
+        "analysis_mode": "standard",
+        "task_mode": "content_intelligence",
+        "keyword": "脱敏关键词",
+        "max_pages": 1,
+        "include_competitors": True,
+        "creator_provider": "import",
+        "creator_import_format": "json",
+        "creator_import_data": {"unknown": "payload"},
+        "idempotency_key": "invalid-creator-import-123",
+    })
+    assert response.status_code == 422
+    assert response.json()["error_code"] == "CREATOR_IMPORT_VALIDATION_FAILED"
+    assert "payload" not in response.json()["message"]
+
+
+@pytest.mark.asyncio
 async def test_owned_search_snapshot_is_queryable(api_client):
     client, session_factory = api_client
     await register(client, "snapshot-query@example.com")
@@ -181,6 +203,81 @@ async def test_job_ownership_is_enforced(api_client):
     response = await client.get(f"/jobs/{job_id}")
     assert response.status_code == 404
     assert response.json()["error_code"] == "JOB_NOT_FOUND"
+
+
+@pytest.mark.asyncio
+async def test_competitor_results_endpoint_enforces_job_ownership(api_client):
+    client, session_factory = api_client
+    await register(client, "competitor-owner@example.com")
+    created = await client.post("/jobs", json={
+        "query": "建立B站脱敏关键词当前搜索快照",
+        "platforms": ["bilibili"],
+        "analysis_mode": "standard",
+        "task_mode": "content_intelligence",
+        "keyword": "脱敏关键词",
+        "max_pages": 1,
+        "include_competitors": True,
+        "idempotency_key": "competitor-owner-123",
+    })
+    job_id = uuid.UUID(created.json()["id"])
+    async with session_factory() as db:
+        run = CrawlRun(
+            job_id=job_id,
+            schema_version="content-intelligence.p0.1",
+            snapshot_revision="20260716_0003",
+            keyword="脱敏关键词",
+            requested_pages=1,
+            successful_pages=1,
+            raw_result_count=1,
+            deduplicated_video_count=1,
+            candidate_creator_count=1,
+            provider_name="fixture",
+            provider_version="fixture-v1",
+            sort_mode="relevance",
+            time_range="all",
+            filters={},
+            status="success",
+            partial_success=False,
+            coverage={"actual_competitor_count": 0},
+        )
+        db.add(run)
+        await db.flush()
+        db.add(CreatorRecord(
+            mid="90001",
+            name="sanitized creator",
+            observed_at=datetime.now(timezone.utc),
+            provider_name="fixture",
+            provider_version="fixture-v1",
+            recent_sample_availability="missing",
+            recent_sample_count=0,
+        ))
+        await db.flush()
+        db.add(CompetitorScoreRecord(
+            crawl_run_id=run.id,
+            creator_mid="90001",
+            creator_name="sanitized creator",
+            scoring_version="competitor-score.p0.1",
+            component_scores={},
+            component_details={},
+            penalty_scores={},
+            total_score=0,
+            confidence=0,
+            qualification_status="discovery_only",
+            selected=False,
+            evidence_ids=[],
+            search_candidate_sources=[],
+            creator_sample_sources=[],
+            tie_break_values=[0, 0, 0, 0, 1, "90001"],
+            metric_results=[],
+        ))
+        await db.commit()
+    owned = await client.get(f"/jobs/{job_id}/competitors")
+    assert owned.status_code == 200
+    await client.post("/auth/logout")
+    await register(client, "competitor-other@example.com")
+    denied = await client.get(f"/jobs/{job_id}/competitors")
+    assert denied.status_code == 404
+    assert denied.json()["error_code"] == "JOB_NOT_FOUND"
 
 
 @pytest.mark.asyncio

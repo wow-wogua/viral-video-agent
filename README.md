@@ -97,6 +97,8 @@ Compose 包含 8 个服务：`frontend`、`app`、`worker`、`postgres`、`redis
 - [LangGraph v2 Agent 架构与 A/B](docs/architecture-v2-plan.md)
 - [P0-B Search Provider 与搜索快照](docs/content-intelligence-search-providers.md)
 - [2026-07-16 P0-B 验证记录](docs/content-intelligence-p0b-validation-20260716.md)
+- [P0-C Creator Provider、竞品相关性与 Top 5](docs/content-intelligence-competitor-scoring.md)
+- [2026-07-16 P0-C 验证记录](docs/content-intelligence-p0c-validation-20260716.md)
 - [权限、数据与 Evidence 边界](docs/security-and-data.md)
 - [2026-07-13 验收记录](docs/validation-20260713.md)
 
@@ -178,6 +180,7 @@ POST   /jobs/{job_id}/cancel
 POST   /jobs/{job_id}/retry
 GET    /jobs/{job_id}/events
 GET    /jobs/{job_id}/search-snapshot
+GET    /jobs/{job_id}/competitors
 GET    /reports/{report_id}
 POST   /reports/{report_id}/shares
 POST   /reports/{report_id}/feedback
@@ -187,7 +190,7 @@ POST   /reports/{report_id}/feedback
 
 Redis 只保存队列、临时状态、事件和缓存；长期业务事实全部进入 PostgreSQL。
 
-`task_mode=content_intelligence` 是 P0-B 搜索快照入口：支持最多 5 页 Development/Import Provider、逐页状态、BVID/MID 去重和按 crawl run 冻结的视频/创作者观测；历史快照不从全局最新实体回读。本阶段不生成 Top 5 竞品或情报报告。未传 `task_mode` 的现有请求继续走旧分析路径。
+`task_mode=content_intelligence` 默认保持 P0-B 搜索快照入口：支持最多 5 页 Development/Import Provider、逐页状态、BVID/MID 去重和按 crawl run 冻结的视频/创作者观测；历史快照不从全局最新实体回读。显式传 `include_competitors=true` 时才继续执行 P0-C Creator Provider、结构化相关性、确定性评分和最多5个 qualified Top 5，并通过独立接口查询；它仍不生成代表视频、ASR、完整情报报告或正常 `reports` 行。未传 `task_mode` 的现有请求继续走旧分析路径。
 
 ## Evidence 引用
 
@@ -235,7 +238,7 @@ cd ..
 docker compose config --quiet
 ```
 
-当前验收：56 条 Python 测试，其中包含 20 条冻结 B 站产品输入回归；完整记录见 [验收文档](docs/validation-20260713.md)。
+当前完整 Python 回归为 152 条测试；P0-C 的工程链路已实现，但 20 关键词质量 Gate 未通过，不能进入 P0-D。P0-C 详细负面结果见 [验证记录](docs/content-intelligence-p0c-validation-20260716.md)。
 
 ### 真实 API 冒烟（2026-07-13）
 

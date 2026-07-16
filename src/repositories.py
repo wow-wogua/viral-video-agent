@@ -66,7 +66,10 @@ class JobRepository:
     async def save(self, job: AnalysisJob) -> AnalysisJob: await self.db.commit(); return job
     async def delete_owned(self, job: AnalysisJob) -> None: await self.db.delete(job); await self.db.commit()
     async def clear_outputs(self, job_id: uuid.UUID) -> None:
-        await self.db.execute(delete(EvidenceItem).where(EvidenceItem.job_id == job_id))
+        await self.db.execute(delete(EvidenceItem).where(
+            EvidenceItem.job_id == job_id,
+            EvidenceItem.crawl_run_id.is_(None),
+        ))
         await self.db.execute(delete(UsageRecord).where(UsageRecord.job_id == job_id))
         await self.db.execute(delete(Report).where(Report.job_id == job_id))
         await self.db.commit()

@@ -20,6 +20,7 @@
 - `SearchPage`：页码、请求时间、来源、状态、数量、原始响应 hash 和错误。
 - `Video`：BVID、MID、标题、元数据、互动字段、观测时间、Provider 和缺失字段。
 - `Creator`：MID、名称、主页、近期样本可用性和缺失原因。
+- `CreatorSample` / `CreatorVideo`：独立 Creator Provider 的公开主页观测、最新最多20条投稿、30/90天窗口、来源和缺失状态；不与搜索候选页混写。
 - `CreatorQualificationEvidence`：关键词范围内的账号主页、最新投稿审计、近 90 天样本与相关计数、粉丝、相关播放中位数和 Evidence；不得由单条搜索视频或仅历史集中投稿推导当前资格。
 - `CompetitorScore`：分项、扣分、总分、置信度和入选/排除理由。
 - `RepresentativeSelection`：选择类型、顺序、原因和 Evidence。
@@ -58,3 +59,7 @@
 ## P0-B 实现
 
 Search Provider、分页编排、Import Provider、规范化、去重、per-crawl-run 不可变 observation、数据库快照和 API/Worker 接入见 [P0-B Search Provider 与搜索快照](content-intelligence-search-providers.md)。全局 BVID/MID 实体保存最新归一化状态，历史 API 只读取目标 crawl run 的冻结视频/创作者观测。P0-B 成功只表示搜索快照完成；`actual_competitor_count` 仍为 0，不代表 Top 5、代表视频或情报报告已经实现。
+
+## P0-C 实现
+
+Creator Provider、逐视频相关性、资格政策、评分、Top 5、评测公式和独立查询接口见 [P0-C Creator Provider、竞品相关性与 Top 5](content-intelligence-competitor-scoring.md)。P0-C 只保存结构化账号审计和竞品结果，不创建正常报告，不进入代表视频、ASR、确定性商业指标或 `IntelligenceReport`。

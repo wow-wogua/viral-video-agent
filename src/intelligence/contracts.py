@@ -70,6 +70,15 @@ class SampleAvailability(StrEnum):
     MISSING = "missing"
 
 
+class CreatorSampleStatus(StrEnum):
+    SUCCESS = "success"
+    PARTIAL = "partial"
+    MISSING = "missing"
+    FAILED = "failed"
+    TIMEOUT = "timeout"
+    CANCELLED = "cancelled"
+
+
 class CreatorQualificationStatus(StrEnum):
     DISCOVERY_ONLY = "discovery_only"
     EMERGING_CANDIDATE = "emerging_candidate"
@@ -207,6 +216,79 @@ class Creator(StrictModel):
     missing_reason: str | None = None
 
 
+class CreatorVideo(StrictModel):
+    schema_version: Literal[CONTENT_INTELLIGENCE_SCHEMA_VERSION] = CONTENT_INTELLIGENCE_SCHEMA_VERSION
+    bvid: str = Field(pattern=r"^BV[0-9A-Za-z]{10}$")
+    creator_mid: str
+    creator_name: str
+    title: str
+    description: str | None = None
+    tags: list[str] = Field(default_factory=list)
+    partition: str | None = None
+    published_at: datetime | None = None
+    duration_seconds: int | None = Field(default=None, ge=0)
+    cover_url: str | None = None
+    source_url: str
+    view: int | None = Field(default=None, ge=0)
+    like: int | None = Field(default=None, ge=0)
+    coin: int | None = Field(default=None, ge=0)
+    favorite: int | None = Field(default=None, ge=0)
+    reply: int | None = Field(default=None, ge=0)
+    share: int | None = Field(default=None, ge=0)
+    danmaku: int | None = Field(default=None, ge=0)
+    observed_at: datetime
+    provider_name: str
+    provider_version: str
+    sample_rank: int = Field(ge=1, le=20)
+    raw_payload_hash: str | None = Field(default=None, pattern=r"^[a-f0-9]{64}$")
+    missing_fields: list[str] = Field(default_factory=list)
+
+
+class CreatorSample(StrictModel):
+    schema_version: Literal[CONTENT_INTELLIGENCE_SCHEMA_VERSION] = CONTENT_INTELLIGENCE_SCHEMA_VERSION
+    creator_mid: str
+    creator_name: str
+    profile_url: str
+    status: CreatorSampleStatus
+    observed_at: datetime
+    provider_name: str
+    provider_version: str
+    provider_kind: Literal["development", "import", "fixture", "production"]
+    source_provider_name: str
+    source_provider_version: str
+    source_url: str
+    follower_count: int | None = Field(default=None, ge=0)
+    uploads: list[CreatorVideo] = Field(default_factory=list, max_length=20)
+    recent_30d_upload_count: int = Field(default=0, ge=0, le=20)
+    recent_90d_upload_count: int = Field(default=0, ge=0, le=20)
+    missing_reason: str | None = None
+    raw_payload_hash: str | None = Field(default=None, pattern=r"^[a-f0-9]{64}$")
+
+    @model_validator(mode="after")
+    def validate_sample(self) -> "CreatorSample":
+        if any(video.creator_mid != self.creator_mid for video in self.uploads):
+            raise ValueError("creator sample videos must match creator_mid")
+        ranks = [video.sample_rank for video in self.uploads]
+        if len(ranks) != len(set(ranks)):
+            raise ValueError("creator sample ranks must be unique")
+        if self.recent_30d_upload_count > self.recent_90d_upload_count:
+            raise ValueError("recent_30d_upload_count cannot exceed recent_90d_upload_count")
+        if self.recent_90d_upload_count > len(self.uploads):
+            raise ValueError("recent_90d_upload_count cannot exceed the upload sample")
+        if self.status == CreatorSampleStatus.SUCCESS and not self.uploads:
+            raise ValueError("successful creator samples require at least one upload")
+        if self.status in {
+            CreatorSampleStatus.MISSING,
+            CreatorSampleStatus.FAILED,
+            CreatorSampleStatus.TIMEOUT,
+            CreatorSampleStatus.CANCELLED,
+        } and self.uploads:
+            raise ValueError("unsuccessful creator samples cannot contain uploads")
+        if self.status != CreatorSampleStatus.SUCCESS and not self.missing_reason:
+            raise ValueError("non-success creator samples require missing_reason")
+        return self
+
+
 class CreatorQualificationEvidence(StrictModel):
     """Keyword-scoped account evidence; search-result relevance is not sufficient."""
 
@@ -253,19 +335,76 @@ class RelevanceDecision(StrictModel):
     labeler_version: str
 
 
+class CreatorSemanticAssessment(StrictModel):
+    generalist: bool | None = None
+    risk_flags: list[
+        Literal[
+            "aggregator",
+            "reupload",
+            "course_matrix",
+            "content_farm",
+            "news_repost",
+            "occasional_hit",
+        ]
+    ] = Field(default_factory=list)
+    reason: str
+    confidence: float = Field(ge=0, le=1)
+    labeler: str
+    labeler_version: str
+
+
+class ScoreComponent(StrictModel):
+    score: float = Field(ge=0)
+    max_score: float = Field(gt=0)
+    numerator: float | None = None
+    denominator: float | None = None
+    sample_size: int = Field(ge=0)
+    formula: str
+    missing_reason: str | None = None
+
+    @model_validator(mode="after")
+    def validate_score_boundary(self) -> "ScoreComponent":
+        if self.score > self.max_score:
+            raise ValueError("component score cannot exceed max_score")
+        return self
+
+
 class CompetitorScore(StrictModel):
     schema_version: Literal[CONTENT_INTELLIGENCE_SCHEMA_VERSION] = CONTENT_INTELLIGENCE_SCHEMA_VERSION
     scoring_version: Literal[SCORING_VERSION] = SCORING_VERSION
     creator_mid: str
+    creator_name: str
     component_scores: dict[str, float]
+    component_details: dict[str, ScoreComponent]
     penalty_scores: dict[str, float] = Field(default_factory=dict)
     total_score: float = Field(ge=0, le=100)
     confidence: float = Field(ge=0, le=1)
+    qualification_status: CreatorQualificationStatus
     selected: bool = False
     selection_rank: int | None = Field(default=None, ge=1, le=MAX_COMPETITORS)
     inclusion_reason: str | None = None
     exclusion_reason: str | None = None
     evidence_ids: list[str] = Field(default_factory=list)
+    search_candidate_sources: list[str] = Field(default_factory=list)
+    creator_sample_sources: list[str] = Field(default_factory=list)
+    tie_break_values: list[str | int | float] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_score_shape(self) -> "CompetitorScore":
+        if set(self.component_scores) != set(self.component_details):
+            raise ValueError("component_scores and component_details must have identical keys")
+        for name, value in self.component_scores.items():
+            if abs(value - self.component_details[name].score) > 1e-9:
+                raise ValueError("component score does not match component detail")
+        if sum(self.penalty_scores.values()) > 20.000001:
+            raise ValueError("competitor penalties cannot exceed 20")
+        if self.selected and self.qualification_status != CreatorQualificationStatus.QUALIFIED_REFERENCE:
+            raise ValueError("only qualified_reference creators can be selected")
+        if self.selected and self.selection_rank is None:
+            raise ValueError("selected competitors require selection_rank")
+        if not self.selected and self.selection_rank is not None:
+            raise ValueError("unselected competitors cannot have selection_rank")
+        return self
 
 
 class RepresentativeVideo(StrictModel):

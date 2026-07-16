@@ -13,6 +13,8 @@ from src.config import USER_MONTHLY_JOB_LIMIT
 from src.db.models import User
 from src.db.session import get_db
 from src.intelligence.contracts import SearchRequest
+from src.intelligence.competitor_store import get_competitor_results
+from src.intelligence.creator_providers import ImportCreatorProvider
 from src.intelligence.providers import ImportSearchProvider, validate_local_filters
 from src.intelligence.snapshots import get_search_snapshot
 from src.queue import JobQueue, get_job_queue
@@ -76,6 +78,34 @@ async def create_job(payload: JobCreate, user: User = Depends(get_current_user),
                 detail = str(exc)[:240]
             raise AppError(422, "IMPORT_VALIDATION_FAILED", f"导入快照校验失败：{detail}") from exc
         provider_config.update({"format": payload.import_format, "data": payload.import_data})
+    competitor_config: dict = {
+        "enabled": True,
+        "context": {
+            "category": payload.keyword_category,
+            "intent_definition": payload.intent_definition,
+            "allowed_subtopics": payload.allowed_subtopics,
+            "exclusion_rules": payload.exclusion_rules,
+        },
+        "creator_provider": {"kind": payload.creator_provider},
+    }
+    if payload.include_competitors and payload.creator_provider == "import":
+        try:
+            if payload.creator_import_format == "json":
+                ImportCreatorProvider.from_json(payload.creator_import_data)
+            else:
+                ImportCreatorProvider.from_csv(payload.creator_import_data)
+        except (ValueError, TypeError) as exc:
+            if isinstance(exc, ValidationError) and exc.errors():
+                error = exc.errors()[0]
+                location = ".".join(str(item) for item in error.get("loc", ()))
+                detail = f"{location}: {error.get('msg', 'invalid value')}" if location else error.get("msg", "invalid value")
+            else:
+                detail = str(exc)[:240]
+            raise AppError(422, "CREATOR_IMPORT_VALIDATION_FAILED", f"账号样本导入校验失败：{detail}") from exc
+        competitor_config["creator_provider"].update({
+            "format": payload.creator_import_format,
+            "data": payload.creator_import_data,
+        })
     job = await repo.create(
         user_id=user.id,
         query=payload.query,
@@ -88,7 +118,11 @@ async def create_job(payload: JobCreate, user: User = Depends(get_current_user),
         time_range=payload.time_range,
         partition=payload.partition,
         max_pages=payload.max_pages,
-        request_filters={"filters": payload.filters, "provider": provider_config},
+        request_filters={
+            "filters": payload.filters,
+            "provider": provider_config,
+            **({"competitors": competitor_config} if payload.include_competitors else {}),
+        },
     )
     await repo.add_event(job.id, "queued", "任务已创建，等待后台 Worker。", 0)
     try:
@@ -132,6 +166,20 @@ async def get_job_search_snapshot(job_id: uuid.UUID, user: User = Depends(get_cu
         else "current"
     )
     return snapshot
+
+
+@router.get("/{job_id}/competitors", response_model=dict)
+async def get_job_competitors(job_id: uuid.UUID, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    job = await require_job(job_id, user, db)
+    results = await get_competitor_results(db, job_id)
+    if results is None:
+        raise AppError(404, "COMPETITOR_RESULTS_NOT_FOUND", ERROR_MESSAGES["COMPETITOR_RESULTS_NOT_FOUND"])
+    results["attempt_state"] = (
+        "previous_attempt"
+        if job.retry_count > 0 and job.status in {"pending", "running"}
+        else "current"
+    )
+    return results
 
 
 @router.post("/{job_id}/cancel", response_model=JobRead)

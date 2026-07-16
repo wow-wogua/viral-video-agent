@@ -27,6 +27,8 @@ ERROR_MESSAGES = {
     "SEARCH_SNAPSHOT_NOT_FOUND": "该任务尚无可查询的搜索快照。",
     "SEARCH_FILTER_INVALID": "搜索过滤条件无效。",
     "IMPORT_VALIDATION_FAILED": "导入快照校验失败。",
+    "CREATOR_IMPORT_VALIDATION_FAILED": "账号样本导入校验失败。",
+    "COMPETITOR_RESULTS_NOT_FOUND": "该任务尚无可查询的竞品评分结果。",
     "NO_VIDEO_RESULTS": "没有找到足够的B站视频样本，请尝试更换赛道关键词。",
     "LLM_RATE_LIMITED": "模型服务繁忙，任务将稍后重试。",
     "LLM_AUTH_FAILED": "模型服务认证失败，请联系管理员检查配置。",

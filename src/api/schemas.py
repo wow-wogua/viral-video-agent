@@ -32,6 +32,14 @@ class JobCreate(BaseModel):
     search_provider: Literal["development", "import"] = "development"
     import_format: Literal["json", "csv"] | None = None
     import_data: dict[str, Any] | str | None = None
+    include_competitors: bool = False
+    keyword_category: Literal["broad", "vertical", "brand", "ambiguous", "low_result"] = "vertical"
+    intent_definition: str = Field(default="", max_length=2000)
+    allowed_subtopics: list[str] = Field(default_factory=list, max_length=20)
+    exclusion_rules: list[str] = Field(default_factory=list, max_length=20)
+    creator_provider: Literal["development", "import"] = "development"
+    creator_import_format: Literal["json", "csv"] | None = None
+    creator_import_data: dict[str, Any] | str | None = None
     idempotency_key: str = Field(min_length=8, max_length=128)
 
     @field_validator("platforms")
@@ -46,8 +54,16 @@ class JobCreate(BaseModel):
         if self.max_pages is None:
             self.max_pages = 5 if self.task_mode == "content_intelligence" else 1
         if self.task_mode == "legacy":
-            if self.search_provider != "development" or self.import_data is not None or self.import_format is not None:
-                raise ValueError("legacy jobs do not accept search provider imports")
+            if (
+                self.search_provider != "development"
+                or self.import_data is not None
+                or self.import_format is not None
+                or self.include_competitors
+                or self.creator_provider != "development"
+                or self.creator_import_data is not None
+                or self.creator_import_format is not None
+            ):
+                raise ValueError("legacy jobs do not accept content-intelligence provider inputs")
             return self
         if not self.keyword:
             raise ValueError("content_intelligence jobs require keyword")
@@ -62,6 +78,19 @@ class JobCreate(BaseModel):
                 raise ValueError("CSV import_data must be text")
         elif self.import_format is not None or self.import_data is not None:
             raise ValueError("development provider does not accept import data")
+        if not self.include_competitors:
+            if self.creator_provider != "development" or self.creator_import_format is not None or self.creator_import_data is not None:
+                raise ValueError("creator provider inputs require include_competitors=true")
+            return self
+        if self.creator_provider == "import":
+            if self.creator_import_format is None or self.creator_import_data is None:
+                raise ValueError("creator import requires creator_import_format and creator_import_data")
+            if self.creator_import_format == "json" and not isinstance(self.creator_import_data, (dict, str)):
+                raise ValueError("creator JSON import data must be an object or JSON string")
+            if self.creator_import_format == "csv" and not isinstance(self.creator_import_data, str):
+                raise ValueError("creator CSV import data must be text")
+        elif self.creator_import_format is not None or self.creator_import_data is not None:
+            raise ValueError("development creator provider does not accept import data")
         return self
 
 

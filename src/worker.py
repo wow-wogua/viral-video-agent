@@ -15,8 +15,12 @@ from src.agents.analyst import analyst_node
 from src.agents.writer import writer_node
 from src.graph.builder import build_graph
 from src.graph.v2 import stable_evidence_id
+from src.intelligence.competitor_service import analyze_competitors
+from src.intelligence.competitor_store import persist_competitor_analysis
 from src.intelligence.contracts import CrawlStatus, SearchRequest
+from src.intelligence.creator_providers import BilibiliDevelopmentCreatorProvider, ImportCreatorProvider
 from src.intelligence.providers import BilibiliDevelopmentSearchProvider, ImportSearchProvider
+from src.intelligence.relevance import LLMRelevanceLabeler, RelevanceContext
 from src.intelligence.search_service import execute_search_snapshot
 from src.intelligence.snapshots import persist_search_snapshot
 from src.reporting.validation import finalize_report, validate_claims, validate_report_references
@@ -88,6 +92,45 @@ def _search_provider_for_job(job):
     raise ValueError(f"unsupported search provider: {kind}")
 
 
+def _creator_provider_for_job(job):
+    config = ((job.request_filters or {}).get("competitors") or {}).get("creator_provider", {})
+    kind = config.get("kind", "development")
+    if kind == "development":
+        return BilibiliDevelopmentCreatorProvider()
+    if kind == "import":
+        if config.get("format") == "json":
+            return ImportCreatorProvider.from_json(config.get("data"))
+        if config.get("format") == "csv":
+            return ImportCreatorProvider.from_csv(config.get("data") or "")
+        raise ValueError("creator import provider format is missing")
+    raise ValueError(f"unsupported creator provider: {kind}")
+
+
+def _sanitize_import_payloads(job) -> None:
+    request_filters = dict(job.request_filters or {})
+    for key in ("provider",):
+        config = dict(request_filters.get(key, {}))
+        import_data = config.pop("data", None)
+        if import_data is not None:
+            import hashlib
+            import json
+            serialized = json.dumps(import_data, ensure_ascii=False, sort_keys=True, default=str)
+            config["payload_sha256"] = hashlib.sha256(serialized.encode("utf-8")).hexdigest()
+            request_filters[key] = config
+    competitor_config = dict(request_filters.get("competitors", {}))
+    if competitor_config:
+        creator_config = dict(competitor_config.get("creator_provider", {}))
+        creator_data = creator_config.pop("data", None)
+        if creator_data is not None:
+            import hashlib
+            import json
+            serialized = json.dumps(creator_data, ensure_ascii=False, sort_keys=True, default=str)
+            creator_config["payload_sha256"] = hashlib.sha256(serialized.encode("utf-8")).hexdigest()
+            competitor_config["creator_provider"] = creator_config
+            request_filters["competitors"] = competitor_config
+    job.request_filters = request_filters
+
+
 async def _run_content_intelligence_job(job_id: uuid.UUID, redis=None) -> None:
     async with async_session_factory() as db:
         job = await JobRepository(db).get(job_id)
@@ -106,6 +149,7 @@ async def _run_content_intelligence_job(job_id: uuid.UUID, redis=None) -> None:
         )
         existing_run = await db.scalar(select(CrawlRunRecord).where(CrawlRunRecord.job_id == job_id))
         crawl_run_id = str(existing_run.id) if existing_run else None
+        competitor_config = (job.request_filters or {}).get("competitors") or {}
 
     await _event(job_id, "collecting", f"正在建立最多 {request.max_pages} 页的B站当前搜索快照。", 15, redis=redis)
     try:
@@ -118,13 +162,43 @@ async def _run_content_intelligence_job(job_id: uuid.UUID, redis=None) -> None:
     finally:
         await provider.close()
 
-    await _event(job_id, "persisting", "正在保存逐页状态、去重视频和候选账号。", 85, redis=redis)
+    competitor_analysis = None
+    if competitor_config.get("enabled") and bundle.videos and bundle.crawl_run.coverage.successful_pages > 0:
+        await _event(job_id, "auditing_creators", "正在审计候选账号的近期公开投稿并生成结构化相关性标签。", 55, redis=redis)
+        creator_provider = _creator_provider_for_job(job)
+        context_config = competitor_config.get("context") or {}
+        try:
+            competitor_analysis = await analyze_competitors(
+                bundle,
+                creator_provider,
+                LLMRelevanceLabeler(),
+                RelevanceContext(
+                    keyword=request.keyword,
+                    category=context_config.get("category", "vertical"),
+                    intent_definition=context_config.get("intent_definition", ""),
+                    allowed_subtopics=tuple(context_config.get("allowed_subtopics") or ()),
+                    exclusion_rules=tuple(context_config.get("exclusion_rules") or ()),
+                ),
+                cancel_check=lambda: _job_cancelled(job_id),
+            )
+        finally:
+            await creator_provider.close()
+
+    await _event(
+        job_id,
+        "persisting",
+        "正在原子保存搜索快照、账号样本、分项评分和Evidence。" if competitor_analysis else "正在保存逐页状态、去重视频和候选账号。",
+        85,
+        redis=redis,
+    )
     async with async_session_factory() as db:
         repo = JobRepository(db)
         job = await repo.get(job_id)
         if not job:
             return
         await persist_search_snapshot(db, job_id, bundle)
+        if competitor_analysis is not None:
+            await persist_competitor_analysis(db, job_id, competitor_analysis)
         completed_at = datetime.now(timezone.utc)
         provider_kind = bundle.crawl_run.provider.provider_kind
         if job.status == "cancelled" or bundle.crawl_run.status == CrawlStatus.CANCELLED:
@@ -149,21 +223,16 @@ async def _run_content_intelligence_job(job_id: uuid.UUID, redis=None) -> None:
             job.error_message = ERROR_MESSAGES[job.error_code]
         job.progress = 100
         job.completed_at = completed_at
-        if provider_kind == "import" and job.status == "completed":
-            request_filters = dict(job.request_filters or {})
-            provider_config = dict(request_filters.get("provider", {}))
-            import_data = provider_config.pop("data", None)
-            if import_data is not None:
-                import hashlib
-                import json
-                serialized = json.dumps(import_data, ensure_ascii=False, sort_keys=True, default=str)
-                provider_config["payload_sha256"] = hashlib.sha256(serialized.encode("utf-8")).hexdigest()
-            request_filters["provider"] = provider_config
-            job.request_filters = request_filters
+        _sanitize_import_payloads(job)
         await db.commit()
 
+    success_message = (
+        "搜索快照与P0-C竞品评分已完成；未生成代表视频、ASR或完整情报报告。"
+        if competitor_analysis is not None
+        else "搜索快照已完成；未生成竞品排名或情报报告。"
+    )
     final_event = {
-        CrawlStatus.SUCCESS: ("completed", "搜索快照已完成；P0-B未生成竞品排名或情报报告。", "info"),
+        CrawlStatus.SUCCESS: ("completed", success_message, "info"),
         CrawlStatus.PARTIAL: ("partial", "搜索快照部分成功，请查看逐页错误和覆盖说明。", "warning"),
         CrawlStatus.EMPTY: ("partial", "所有请求页均成功但没有规范化视频。", "warning"),
         CrawlStatus.FAILED: ("failed", "没有成功响应页，已保存失败状态。", "error"),

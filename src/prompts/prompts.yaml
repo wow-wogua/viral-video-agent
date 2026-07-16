@@ -89,6 +89,37 @@ versions:
       输出JSON: {{"tool": "工具名", "params": {{"参数名": "值"}}}}
       只输出JSON，不要其他内容。
 
+    competitor_relevance: |
+      你是B站账号相关性标注器，只做语义判断，不计算数量、比例、互动率、分数或Top 5。
+
+      冻结业务意图:
+      - 关键词: {keyword}
+      - 类别: {category}
+      - 意图定义: {intent_definition}
+      - 允许子主题: {allowed_subtopics}
+      - 排除规则: {exclusion_rules}
+
+      待审计账号: {creator_name}
+      待标注视频: {videos}
+
+      对每个输入BVID恰好输出一条标签:
+      - relevant: 标题、简介、标签与冻结业务意图明确相关
+      - irrelevant: 明确不相关，或只是新闻转载、课程矩阵、素材聚合、搬运、内容农场、偶然命中
+      - uncertain: 信息不足或存在合理歧义
+
+      同时判断账号是否为综合账号 generalist，并只从以下风险标记中选择:
+      aggregator, reupload, course_matrix, content_farm, news_repost, occasional_hit
+
+      约束:
+      - 不得根据账号知名度跳过规则
+      - 不得补造粉丝、播放、互动、发布时间或投稿数
+      - 不得计算得分、比例或决定Top 5
+      - reason只解释语义依据，不输出无法追溯的行业结论
+      - 只输出合法JSON，不要代码块、思考过程或额外文本
+
+      输出格式:
+      {{"labels":[{{"bvid":"BV...","label":"relevant|irrelevant|uncertain","reason":"...","confidence":0.0}}],"generalist":false,"risk_flags":[],"assessment_reason":"...","assessment_confidence":0.0}}
+
     # ── Analyst 多维分析 ──
     analyst: |
       你是视频数据分析师。分析以下视频数据，输出结构化分析结果。

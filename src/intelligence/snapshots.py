@@ -19,6 +19,9 @@ from src.db.models import (
 from src.intelligence.search_service import SearchSnapshotBundle
 
 
+IMMUTABLE_SNAPSHOT_REVISION = "20260716_0003"
+
+
 async def _upsert_creator(db: AsyncSession, creator) -> None:
     record = await db.get(CreatorRecord, creator.mid)
     if record is None:
@@ -91,7 +94,11 @@ async def persist_search_snapshot(
     contract = bundle.crawl_run
     run = await db.scalar(select(CrawlRun).where(CrawlRun.job_id == job_id))
     if run is None:
-        run = CrawlRun(id=uuid.UUID(contract.crawl_run_id), job_id=job_id)
+        run = CrawlRun(
+            id=uuid.UUID(contract.crawl_run_id),
+            job_id=job_id,
+            snapshot_revision=IMMUTABLE_SNAPSHOT_REVISION,
+        )
         db.add(run)
     else:
         await db.execute(delete(CrawlRunCreatorObservation).where(CrawlRunCreatorObservation.crawl_run_id == run.id))
@@ -217,6 +224,7 @@ async def get_search_snapshot(db: AsyncSession, job_id: uuid.UUID) -> dict[str, 
     return {
         "crawl_run_id": run.id,
         "schema_version": run.schema_version,
+        "snapshot_revision": run.snapshot_revision,
         "keyword": run.keyword,
         "provider_name": run.provider_name,
         "provider_version": run.provider_version,
