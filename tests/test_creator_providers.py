@@ -8,9 +8,11 @@ from pydantic import ValidationError
 
 from src.intelligence.contracts import CreatorSampleStatus
 from src.intelligence.creator_providers import (
+    CREATOR_RISK_CONTROL_THRESHOLD,
     BilibiliDevelopmentCreatorProvider,
     FixtureCreatorProvider,
     ImportCreatorProvider,
+    creator_scope_hash,
 )
 
 
@@ -90,6 +92,9 @@ async def test_development_creator_provider_success_caps_latest_twenty_and_compu
     assert sample.follower_count == 20000
     assert all(video.coin is None and video.share is None and video.like is None for video in sample.uploads)
     assert len(requests) == 3
+    assert sample.request_audit.attempt_count == 3
+    assert sample.request_audit.retry_count == 0
+    assert sample.request_audit.final_classification == "success"
 
 
 @pytest.mark.asyncio
@@ -110,12 +115,22 @@ async def test_development_creator_provider_missing_failed_timeout_and_cancelled
     assert missing.status == CreatorSampleStatus.MISSING
 
     failed_transport, _ = transport(uploads_status=500)
-    failed_provider = BilibiliDevelopmentCreatorProvider(client=httpx.AsyncClient(transport=failed_transport), min_interval_seconds=0, now=lambda: NOW)
+    failed_provider = BilibiliDevelopmentCreatorProvider(
+        client=httpx.AsyncClient(transport=failed_transport),
+        max_retries=0,
+        min_interval_seconds=0,
+        now=lambda: NOW,
+    )
     failed = await failed_provider.fetch_creator("90001", "sanitized creator")
     assert failed.status == CreatorSampleStatus.FAILED
 
     timeout_transport, _ = transport(raise_timeout=True)
-    timeout_provider = BilibiliDevelopmentCreatorProvider(client=httpx.AsyncClient(transport=timeout_transport), min_interval_seconds=0, now=lambda: NOW)
+    timeout_provider = BilibiliDevelopmentCreatorProvider(
+        client=httpx.AsyncClient(transport=timeout_transport),
+        max_retries=0,
+        min_interval_seconds=0,
+        now=lambda: NOW,
+    )
     timed_out = await timeout_provider.fetch_creator("90001", "sanitized creator")
     assert timed_out.status == CreatorSampleStatus.TIMEOUT
 
@@ -135,6 +150,122 @@ async def test_development_creator_provider_missing_upload_list_is_failed_not_em
     assert sample.status == CreatorSampleStatus.FAILED
     assert sample.uploads == []
     assert sample.missing_reason == "uploads_list_missing"
+
+
+@pytest.mark.asyncio
+async def test_development_creator_provider_retries_only_transient_failures_and_audits_backoff():
+    requests = []
+    upload_attempts = 0
+    sleeps = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal upload_attempts
+        requests.append(request)
+        assert "cookie" not in request.headers
+        if request.url.path.endswith("/nav"):
+            return httpx.Response(200, json=nav_payload(), request=request)
+        if request.url.path.endswith("/arc/search"):
+            upload_attempts += 1
+            if upload_attempts < 3:
+                return httpx.Response(503, text="unavailable", request=request)
+            return httpx.Response(
+                200,
+                json={"code": 0, "data": {"is_risk": False, "list": {"vlist": [upload_item(1, days=1)]}}},
+                request=request,
+            )
+        return httpx.Response(200, json={"code": 0, "data": {"follower": 20000}}, request=request)
+
+    async def fake_sleep(seconds):
+        sleeps.append(seconds)
+
+    provider = BilibiliDevelopmentCreatorProvider(
+        client=httpx.AsyncClient(transport=httpx.MockTransport(handler)),
+        max_retries=2,
+        backoff_base_seconds=0.2,
+        min_interval_seconds=0,
+        sleep=fake_sleep,
+        now=lambda: NOW,
+    )
+    sample = await provider.fetch_creator("90001", "sanitized creator")
+    assert sample.status == CreatorSampleStatus.SUCCESS
+    assert upload_attempts == 3
+    assert sample.request_audit.attempt_count == 5
+    assert sample.request_audit.retry_count == 2
+    assert sample.request_audit.total_backoff_seconds == pytest.approx(0.6)
+    assert sum(sleeps) == pytest.approx(0.6)
+    assert [
+        attempt.classification
+        for attempt in sample.request_audit.attempts
+        if attempt.operation == "uploads"
+    ] == ["http_5xx", "http_5xx", "success"]
+
+
+@pytest.mark.asyncio
+async def test_development_creator_provider_risk_control_opens_fixed_circuit_without_dense_retries():
+    requests = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        assert "cookie" not in request.headers
+        if request.url.path.endswith("/nav"):
+            return httpx.Response(200, json=nav_payload(), request=request)
+        if request.url.path.endswith("/arc/search"):
+            return httpx.Response(412, text="risk control", request=request)
+        raise AssertionError("follower endpoint must not be called after upload risk control")
+
+    provider = BilibiliDevelopmentCreatorProvider(
+        client=httpx.AsyncClient(transport=httpx.MockTransport(handler)),
+        min_interval_seconds=0,
+        now=lambda: NOW,
+    )
+    samples = [
+        await provider.fetch_creator(str(90001 + index), "sanitized creator")
+        for index in range(CREATOR_RISK_CONTROL_THRESHOLD)
+    ]
+    request_count_at_open = len(requests)
+    not_attempted = await provider.fetch_creator("99999", "sanitized creator")
+    assert all(sample.status == CreatorSampleStatus.FAILED for sample in samples)
+    assert all(sample.request_audit.retry_count == 0 for sample in samples)
+    assert samples[-1].request_audit.circuit_state == "opened"
+    assert provider.circuit_open
+    assert not_attempted.status == CreatorSampleStatus.MISSING
+    assert not_attempted.missing_reason == "not_attempted_due_to_risk_control"
+    assert not_attempted.request_audit.attempt_count == 0
+    assert not_attempted.request_audit.circuit_state == "open"
+    assert len(requests) == request_count_at_open == 1 + CREATOR_RISK_CONTROL_THRESHOLD
+
+
+@pytest.mark.asyncio
+async def test_provider_minus_352_is_risk_control_and_success_resets_consecutive_counter():
+    upload_outcomes = [-352, 0, -352]
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/nav"):
+            return httpx.Response(200, json=nav_payload(), request=request)
+        if request.url.path.endswith("/arc/search"):
+            code = upload_outcomes.pop(0)
+            payload = (
+                {"code": code, "message": "risk"}
+                if code
+                else {"code": 0, "data": {"is_risk": False, "list": {"vlist": [upload_item(1, days=1)]}}}
+            )
+            return httpx.Response(200, json=payload, request=request)
+        return httpx.Response(200, json={"code": 0, "data": {"follower": 20000}}, request=request)
+
+    provider = BilibiliDevelopmentCreatorProvider(
+        client=httpx.AsyncClient(transport=httpx.MockTransport(handler)),
+        min_interval_seconds=0,
+        now=lambda: NOW,
+    )
+    first = await provider.fetch_creator("90001", "sanitized creator")
+    second = await provider.fetch_creator("90002", "sanitized creator")
+    third = await provider.fetch_creator("90003", "sanitized creator")
+    assert first.missing_reason == "uploads_provider_-352_risk_control"
+    assert first.request_audit.retry_count == 0
+    assert second.status == CreatorSampleStatus.SUCCESS
+    assert second.request_audit.consecutive_risk_control_count == 0
+    assert third.request_audit.consecutive_risk_control_count == 1
+    assert not provider.circuit_open
 
 
 @pytest.mark.asyncio
@@ -158,6 +289,16 @@ def test_import_creator_json_rejects_unknown_fields_duplicates_and_more_than_twe
         ImportCreatorProvider.from_json(payload)
 
     payload = json.loads(FIXTURE.read_text(encoding="utf-8"))
+    payload.update({
+        "source_basis": "user_authorized_export",
+        "authorization_status": "user_attested",
+        "coverage_target_count": 1,
+        "coverage_scope_sha256": "0" * 64,
+    })
+    with pytest.raises(ValidationError, match="coverage hash"):
+        ImportCreatorProvider.from_json(payload)
+
+    payload = json.loads(FIXTURE.read_text(encoding="utf-8"))
     payload["creators"].append(payload["creators"][0])
     with pytest.raises(ValidationError):
         ImportCreatorProvider.from_json(payload)
@@ -169,6 +310,27 @@ def test_import_creator_json_rejects_unknown_fields_duplicates_and_more_than_twe
     ]
     with pytest.raises(ValidationError):
         ImportCreatorProvider.from_json(payload)
+
+
+def test_import_creator_provider_validates_neutral_coverage_and_source_authorization():
+    payload = json.loads(FIXTURE.read_text(encoding="utf-8"))
+    payload.update({
+        "source_basis": "user_authorized_export",
+        "authorization_status": "user_attested",
+        "coverage_target_count": 1,
+        "coverage_scope_sha256": creator_scope_hash({"90001"}),
+    })
+    provider = ImportCreatorProvider.from_json(payload)
+    coverage = provider.validate_coverage(
+        {"90001"},
+        require_exact=True,
+        require_source_declared=True,
+        require_authorized=True,
+    )
+    assert coverage.exact_coverage
+    assert coverage.authorization_documented
+    with pytest.raises(ValueError, match="missing=1, unexpected=1"):
+        provider.validate_coverage({"99999"}, require_exact=True)
 
 
 @pytest.mark.asyncio

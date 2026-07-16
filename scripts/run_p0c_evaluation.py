@@ -7,6 +7,7 @@ import json
 import sys
 import uuid
 from collections import Counter
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -21,12 +22,18 @@ from src.intelligence.competitor_evaluation import aggregate_evaluation, evaluat
 from src.intelligence.competitor_scoring import MAX_CREATOR_AUDITS, aggregate_candidates, rank_creator_audits
 from src.intelligence.competitor_service import analyze_competitors
 from src.intelligence.competitor_store import get_competitor_results, persist_competitor_analysis
-from src.intelligence.contracts import CreatorSample, CreatorSemanticAssessment, RelevanceDecision, SearchRequest
+from src.intelligence.contracts import (
+    CreatorSample,
+    CreatorSemanticAssessment,
+    RelevanceDecision,
+    SearchRequest,
+)
 from src.intelligence.creator_providers import (
     BILIBILI_CREATOR_PROVIDER_VERSION,
     CREATOR_IMPORT_PROVIDER_VERSION,
     BilibiliDevelopmentCreatorProvider,
     ImportCreatorProvider,
+    creator_scope_hash,
 )
 from src.intelligence.evaluation import EvaluationKeyword, validate_evaluation_file
 from src.intelligence.providers import ImportSearchProvider
@@ -38,6 +45,13 @@ from src.intelligence.snapshots import persist_search_snapshot
 def json_dump(path: Path, value: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(value, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
+
+
+def json_dump_atomic(path: Path, value: Any) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    temporary.write_text(json.dumps(value, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
+    temporary.replace(path)
 
 
 def sha12(value: str) -> str:
@@ -144,6 +158,7 @@ def sample_to_import_entry(sample: CreatorSample) -> dict[str, Any]:
         } for video in sample.uploads],
         "missing_reason": sample.missing_reason,
         "raw_payload_hash": sample.raw_payload_hash,
+        "request_audit": sample.request_audit.model_dump(mode="json") if sample.request_audit else None,
     }
 
 
@@ -184,18 +199,150 @@ class CachingLabeler:
         return result
 
 
+@dataclass(slots=True)
+class CreatorCaptureResult:
+    creators: dict[str, dict[str, Any]]
+    summary: dict[str, Any]
+
+
+def _capture_summary(
+    cache: dict[str, dict[str, Any]],
+    *,
+    target_count: int,
+    capture_round_id: str,
+    scope_sha256: str,
+    circuit: dict[str, Any],
+) -> dict[str, Any]:
+    entries = list(cache.values())
+    status_counts = Counter(entry.get("status", "missing") for entry in entries)
+    reason_counts = Counter(entry.get("missing_reason") or "none" for entry in entries)
+    audits = [entry.get("request_audit") or {} for entry in entries]
+    attempted_count = sum(int(audit.get("attempt_count") or 0) > 0 for audit in audits)
+    not_attempted_count = sum(
+        entry.get("missing_reason") == "not_attempted_due_to_risk_control"
+        for entry in entries
+    )
+    resolved_count = len(entries)
+    if circuit.get("state") == "open" or not_attempted_count:
+        capture_status = "circuit_open"
+    elif resolved_count == target_count:
+        capture_status = "completed"
+    else:
+        capture_status = "in_progress"
+    return {
+        "capture_round_id": capture_round_id,
+        "target_scope_sha256": scope_sha256,
+        "target_count": target_count,
+        "resolved_target_count": resolved_count,
+        "attempted_count": attempted_count,
+        "not_attempted_count": not_attempted_count,
+        "usable_sample_count": status_counts.get("success", 0) + status_counts.get("partial", 0),
+        "capture_status": capture_status,
+        "status_counts": dict(status_counts),
+        "reason_counts": dict(reason_counts),
+        "request_attempt_count": sum(int(audit.get("attempt_count") or 0) for audit in audits),
+        "retry_count": sum(int(audit.get("retry_count") or 0) for audit in audits),
+        "total_rate_limit_wait_seconds": sum(
+            float(audit.get("total_rate_limit_wait_seconds") or 0) for audit in audits
+        ),
+        "total_backoff_seconds": sum(float(audit.get("total_backoff_seconds") or 0) for audit in audits),
+        "circuit": circuit,
+    }
+
+
+async def capture_creator_targets(
+    targets: list[tuple[str, str]],
+    output: Path,
+    *,
+    capture_round_id: str,
+    provider: BilibiliDevelopmentCreatorProvider,
+) -> CreatorCaptureResult:
+    if not capture_round_id.strip():
+        raise ValueError("capture_round_id is required")
+    target_mids = [mid for mid, _ in targets]
+    if len(target_mids) != len(set(target_mids)):
+        raise ValueError("creator capture targets must contain unique MIDs")
+    scope_sha256 = creator_scope_hash(target_mids)
+    progress_path = output / "creator-capture-progress.json"
+    cache: dict[str, dict[str, Any]] = {}
+    created_at = datetime.now(timezone.utc)
+    existing_circuit: dict[str, Any] | None = None
+    if progress_path.exists():
+        existing = json.loads(progress_path.read_text(encoding="utf-8"))
+        if existing.get("schema_version") != "creator-capture-progress.p0-c.2":
+            raise ValueError("creator capture progress schema is not resumable by this version")
+        if existing.get("capture_round_id") != capture_round_id:
+            raise ValueError("new creator capture rounds require a new output directory and round ID")
+        if existing.get("target_scope_sha256") != scope_sha256 or existing.get("target_count") != len(targets):
+            raise ValueError("creator capture target scope changed; start a new capture round")
+        existing_provider = existing.get("provider") or {}
+        if existing_provider.get("provider_version") != provider.capabilities.provider_version:
+            raise ValueError("creator capture provider version changed; start a new capture round")
+        cache = {entry["creator_mid"]: entry for entry in existing.get("creators", [])}
+        created_at = datetime.fromisoformat(str(existing["created_at"]).replace("Z", "+00:00"))
+        existing_circuit = existing.get("circuit") or {}
+        provider.restore_risk_control_state(
+            int(existing_circuit.get("consecutive_risk_control_count") or 0),
+            opened_at=existing_circuit.get("opened_at"),
+        )
+
+    def persist() -> dict[str, Any]:
+        circuit = provider.circuit_snapshot()
+        summary = _capture_summary(
+            cache,
+            target_count=len(targets),
+            capture_round_id=capture_round_id,
+            scope_sha256=scope_sha256,
+            circuit=circuit,
+        )
+        json_dump_atomic(progress_path, {
+            "schema_version": "creator-capture-progress.p0-c.2",
+            "capture_round_id": capture_round_id,
+            "created_at": created_at,
+            "updated_at": datetime.now(timezone.utc),
+            "provider": provider.capabilities.model_dump(mode="json"),
+            "target_scope_sha256": scope_sha256,
+            "target_count": len(targets),
+            "summary": summary,
+            "circuit": circuit,
+            "creators": [cache[mid] for mid in target_mids if mid in cache],
+        })
+        return summary
+
+    if existing_circuit and existing_circuit.get("state") == "open":
+        for mid, name in targets:
+            if mid not in cache:
+                cache[mid] = sample_to_import_entry(provider.not_attempted_sample(mid, name))
+        return CreatorCaptureResult(cache, persist())
+
+    pending = [target for target in targets if target[0] not in cache]
+    for index, (mid, name) in enumerate(pending):
+        sample = await provider.fetch_creator(mid, name)
+        cache[mid] = sample_to_import_entry(sample)
+        summary = persist()
+        print(
+            f"creator_capture {summary['attempted_count']}/{len(targets)} status={sample.status.value}",
+            flush=True,
+        )
+        if provider.circuit_open:
+            for remaining_mid, remaining_name in pending[index + 1:]:
+                cache[remaining_mid] = sample_to_import_entry(
+                    provider.not_attempted_sample(remaining_mid, remaining_name)
+                )
+            return CreatorCaptureResult(cache, persist())
+    return CreatorCaptureResult(cache, persist())
+
+
 async def capture_creator_samples(
     bundles: dict[str, SearchSnapshotBundle],
     keywords: list[EvaluationKeyword],
     output: Path,
     *,
     max_creator_audits: int,
-) -> dict[str, dict[str, Any]]:
-    progress_path = output / "creator-capture-progress.json"
-    cache: dict[str, dict[str, Any]] = {}
-    if progress_path.exists():
-        existing = json.loads(progress_path.read_text(encoding="utf-8"))
-        cache = {entry["creator_mid"]: entry for entry in existing.get("creators", [])}
+    capture_round_id: str,
+    creator_capture_limit: int | None,
+    min_interval_seconds: float,
+) -> CreatorCaptureResult:
     targets: dict[str, tuple[str, str]] = {}
     for keyword in keywords:
         context = RelevanceContext(
@@ -208,23 +355,19 @@ async def capture_creator_samples(
         candidates = rank_creator_audits(aggregate_candidates(bundles[keyword.id].videos), context)
         for candidate in candidates[:max_creator_audits]:
             targets.setdefault(candidate.creator_mid, (candidate.creator_mid, candidate.creator_name))
-    pending = [target for mid, target in targets.items() if mid not in cache]
-    provider = BilibiliDevelopmentCreatorProvider()
+    ordered_targets = list(targets.values())
+    if creator_capture_limit is not None:
+        ordered_targets = ordered_targets[:creator_capture_limit]
+    provider = BilibiliDevelopmentCreatorProvider(min_interval_seconds=min_interval_seconds)
     try:
-        for index, (mid, name) in enumerate(pending, 1):
-            sample = await provider.fetch_creator(mid, name)
-            cache[mid] = sample_to_import_entry(sample)
-            if index % 5 == 0 or index == len(pending):
-                json_dump(progress_path, {
-                    "provider": provider.capabilities.model_dump(mode="json"),
-                    "target_count": len(targets),
-                    "completed_count": len(cache),
-                    "creators": list(cache.values()),
-                })
-            print(f"creator_capture {index}/{len(pending)} status={sample.status.value}", flush=True)
+        return await capture_creator_targets(
+            ordered_targets,
+            output,
+            capture_round_id=capture_round_id,
+            provider=provider,
+        )
     finally:
         await provider.close()
-    return cache
 
 
 async def prelabel_creator_samples(
@@ -331,7 +474,38 @@ async def main_async(args) -> int:
         pass
     else:
         raise ValueError("private P0-C evaluation output must remain outside the Git repository")
+    if args.creator_capture_limit is not None and not args.capture_only:
+        raise ValueError("bounded creator_capture_limit is only valid with --capture-only")
+    if args.creator_capture_limit is not None and args.creator_capture_limit < 1:
+        raise ValueError("creator_capture_limit must be positive")
+    if args.creator_min_interval_seconds < 1.0:
+        raise ValueError("real creator capture interval must be at least one second")
+    run_metadata_path = output / "recovery-run-metadata.json"
+    if output.exists() and any(output.iterdir()):
+        if not run_metadata_path.exists():
+            raise ValueError("new creator capture rounds require a new empty output directory")
+        run_metadata = json.loads(run_metadata_path.read_text(encoding="utf-8"))
+        if run_metadata.get("capture_round_id") != args.capture_round_id:
+            raise ValueError("new creator capture rounds require a new output directory and round ID")
+        if run_metadata.get("capture_only") != args.capture_only:
+            raise ValueError("creator capture mode changed; start a new capture round")
+        if run_metadata.get("creator_capture_limit") != args.creator_capture_limit:
+            raise ValueError("creator capture limit changed; start a new capture round")
+        if (
+            "creator_min_interval_seconds" in run_metadata
+            and float(run_metadata["creator_min_interval_seconds"]) != args.creator_min_interval_seconds
+        ):
+            raise ValueError("creator capture interval changed; start a new capture round")
     output.mkdir(parents=True, exist_ok=True)
+    if not run_metadata_path.exists():
+        json_dump_atomic(run_metadata_path, {
+            "schema_version": "p0c-recovery-run.p0.1",
+            "capture_round_id": args.capture_round_id,
+            "created_at": datetime.now(timezone.utc),
+            "capture_only": args.capture_only,
+            "creator_capture_limit": args.creator_capture_limit,
+            "creator_min_interval_seconds": args.creator_min_interval_seconds,
+        })
 
     suite = validate_evaluation_file(args.baseline.resolve(), require_reviewed=True)
     frozen = load_frozen_snapshots(args.p0b.resolve())
@@ -351,20 +525,49 @@ async def main_async(args) -> int:
         "replay_identity": "import replay; not a live search on the evaluation date",
     } for keyword in suite.keywords])
 
-    creator_cache = await capture_creator_samples(
+    creator_capture = await capture_creator_samples(
         bundles,
         suite.keywords,
         output,
         max_creator_audits=args.max_creator_audits,
+        capture_round_id=args.capture_round_id,
+        creator_capture_limit=args.creator_capture_limit,
+        min_interval_seconds=args.creator_min_interval_seconds,
     )
+    json_dump(output / "recovery-capture-summary.json", creator_capture.summary)
+    if args.capture_only:
+        print(
+            f"capture_status={creator_capture.summary['capture_status']} output={output}",
+            flush=True,
+        )
+        return 0
+    if creator_capture.summary["capture_status"] != "completed":
+        json_dump(output / "gate-not-run-summary.json", {
+            "gate_status": "not_run",
+            "reason": "creator_capture_incomplete_due_to_risk_control",
+            "entered_p0d": False,
+            "capture": creator_capture.summary,
+        })
+        print("gate_status=not_run reason=creator_capture_incomplete_due_to_risk_control", flush=True)
+        return 2
     creator_import_payload = {
         "schema_version": "creator-import.p0.1",
         "source_name": "p0-c-public-creator-capture-import-replay",
         "provider_version": CREATOR_IMPORT_PROVIDER_VERSION,
-        "creators": list(creator_cache.values()),
+        "source_basis": "public_unauthenticated_capture",
+        "authorization_status": "development_only",
+        "capture_round_id": args.capture_round_id,
+        "coverage_scope_sha256": creator_scope_hash(set(creator_capture.creators)),
+        "coverage_target_count": len(creator_capture.creators),
+        "creators": list(creator_capture.creators.values()),
     }
     json_dump(output / "creator-import-replay.json", creator_import_payload)
     creator_provider = ImportCreatorProvider.from_json(creator_import_payload)
+    creator_provider.validate_coverage(
+        set(creator_capture.creators),
+        require_exact=True,
+        require_source_declared=True,
+    )
     labeler = CachingLabeler(output / "llm-label-cache")
     await prelabel_creator_samples(
         bundles,
@@ -517,6 +720,10 @@ def main() -> int:
     parser.add_argument("p0b", type=Path)
     parser.add_argument("output", type=Path)
     parser.add_argument("--max-creator-audits", type=int, default=MAX_CREATOR_AUDITS, choices=range(1, MAX_CREATOR_AUDITS + 1))
+    parser.add_argument("--capture-round-id", required=True)
+    parser.add_argument("--capture-only", action="store_true")
+    parser.add_argument("--creator-capture-limit", type=int)
+    parser.add_argument("--creator-min-interval-seconds", type=float, default=1.0)
     return asyncio.run(main_async(parser.parse_args()))
 
 

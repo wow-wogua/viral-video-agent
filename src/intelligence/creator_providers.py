@@ -18,6 +18,8 @@ import httpx
 from pydantic import Field, model_validator
 
 from src.intelligence.contracts import (
+    CreatorRequestAttempt,
+    CreatorRequestAudit,
     CreatorSample,
     CreatorSampleStatus,
     CreatorVideo,
@@ -27,12 +29,19 @@ from src.intelligence.providers import CancelCheck, raw_payload_hash
 
 
 CREATOR_IMPORT_SCHEMA_VERSION = "creator-import.p0.1"
-CREATOR_IMPORT_PROVIDER_VERSION = "import-creator.p0-c.1"
-BILIBILI_CREATOR_PROVIDER_VERSION = "bilibili-public-creator.p0-c.1"
+CREATOR_IMPORT_PROVIDER_VERSION = "import-creator.p0-c.2"
+BILIBILI_CREATOR_PROVIDER_VERSION = "bilibili-public-creator.p0-c.2"
 BILIBILI_NAV_ENDPOINT = "https://api.bilibili.com/x/web-interface/nav"
 BILIBILI_UPLOAD_ENDPOINT = "https://api.bilibili.com/x/space/wbi/arc/search"
 BILIBILI_FOLLOWER_ENDPOINT = "https://api.bilibili.com/x/relation/stat"
 LATEST_UPLOAD_LIMIT = 20
+CREATOR_MAX_RETRIES = 2
+CREATOR_BACKOFF_BASE_SECONDS = 0.5
+CREATOR_RISK_CONTROL_THRESHOLD = 3
+CREATOR_RISK_CONTROL_COOLDOWN_SECONDS = 15 * 60
+CREATOR_RISK_CONTROL_HTTP_STATUSES = frozenset({412})
+CREATOR_RISK_CONTROL_PROVIDER_CODES = frozenset({-412, -352, -401, -403})
+CREATOR_RETRYABLE_HTTP_STATUSES = frozenset({429, 500, 502, 503, 504})
 
 _MIXIN_KEY_ENC_TAB = (
     46, 47, 18, 2, 53, 8, 23, 32, 15, 50, 10, 31, 58, 3, 45, 35,
@@ -116,6 +125,22 @@ async def _is_cancelled(cancel_check: CancelCheck | None) -> bool:
     return bool(cancel_check and await cancel_check())
 
 
+class _CreatorRequestFailure(RuntimeError):
+    def __init__(
+        self,
+        classification: str,
+        reason: str,
+        *,
+        risk_control: bool = False,
+        raw_hash: str | None = None,
+    ) -> None:
+        super().__init__(reason)
+        self.classification = classification
+        self.reason = reason
+        self.risk_control = risk_control
+        self.raw_hash = raw_hash
+
+
 class BilibiliDevelopmentCreatorProvider:
     """Low-frequency, unauthenticated adapter for public creator uploads."""
 
@@ -124,28 +149,37 @@ class BilibiliDevelopmentCreatorProvider:
         *,
         client: httpx.AsyncClient | None = None,
         timeout_seconds: float = 10.0,
+        max_retries: int = CREATOR_MAX_RETRIES,
+        backoff_base_seconds: float = CREATOR_BACKOFF_BASE_SECONDS,
         min_interval_seconds: float = 1.0,
         now: Callable[[], datetime] = utcnow,
         sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
     ) -> None:
-        if timeout_seconds <= 0 or min_interval_seconds < 0:
+        if not 0 <= max_retries <= 4:
+            raise ValueError("creator provider max_retries must be between 0 and 4")
+        if timeout_seconds <= 0 or backoff_base_seconds < 0 or min_interval_seconds < 0:
             raise ValueError("creator provider timing settings are invalid")
         self._owns_client = client is None
         self._client = client or httpx.AsyncClient(
             timeout=timeout_seconds,
             follow_redirects=True,
+            trust_env=False,
             headers={
                 "User-Agent": "Mozilla/5.0 (compatible; ViralVideoAgent-Development/0.1)",
                 "Referer": "https://space.bilibili.com/",
                 "Accept": "application/json, text/plain, */*",
             },
         )
+        self._max_retries = max_retries
+        self._backoff_base_seconds = backoff_base_seconds
         self._min_interval_seconds = min_interval_seconds
         self._now = now
         self._sleep = sleep
         self._last_request_started: float | None = None
         self._mixin_key: str | None = None
         self._mixin_key_expires_at = 0.0
+        self._consecutive_risk_control_count = 0
+        self._circuit_opened_at: datetime | None = None
 
     @property
     def capabilities(self) -> CreatorProviderCapabilities:
@@ -160,12 +194,51 @@ class BilibiliDevelopmentCreatorProvider:
         if self._owns_client:
             await self._client.aclose()
 
-    async def _wait(self, cancel_check: CancelCheck | None) -> None:
-        if await _is_cancelled(cancel_check):
-            raise asyncio.CancelledError
-        if self._last_request_started is None:
-            return
-        remaining = self._min_interval_seconds - (time.monotonic() - self._last_request_started)
+    @property
+    def circuit_open(self) -> bool:
+        return self._circuit_opened_at is not None
+
+    @property
+    def consecutive_risk_control_count(self) -> int:
+        return self._consecutive_risk_control_count
+
+    def circuit_snapshot(self) -> dict[str, Any]:
+        cooldown_until = (
+            self._circuit_opened_at + timedelta(seconds=CREATOR_RISK_CONTROL_COOLDOWN_SECONDS)
+            if self._circuit_opened_at
+            else None
+        )
+        return {
+            "state": "open" if self.circuit_open else "closed",
+            "consecutive_risk_control_count": self._consecutive_risk_control_count,
+            "threshold": CREATOR_RISK_CONTROL_THRESHOLD,
+            "opened_at": self._circuit_opened_at,
+            "cooldown_seconds": CREATOR_RISK_CONTROL_COOLDOWN_SECONDS,
+            "cooldown_until": cooldown_until,
+            "automatic_resume": False,
+        }
+
+    def restore_risk_control_state(
+        self,
+        consecutive_count: int,
+        *,
+        opened_at: datetime | str | None = None,
+    ) -> None:
+        if consecutive_count < 0:
+            raise ValueError("consecutive risk-control count cannot be negative")
+        self._consecutive_risk_control_count = consecutive_count
+        parsed_opened_at = _parse_datetime(opened_at)
+        if consecutive_count >= CREATOR_RISK_CONTROL_THRESHOLD:
+            self._circuit_opened_at = parsed_opened_at or self._now()
+        elif parsed_opened_at is not None:
+            raise ValueError("open circuit state requires the fixed risk-control threshold")
+
+    async def _sleep_with_cancellation(
+        self,
+        seconds: float,
+        cancel_check: CancelCheck | None,
+    ) -> None:
+        remaining = max(0.0, seconds)
         while remaining > 0:
             if await _is_cancelled(cancel_check):
                 raise asyncio.CancelledError
@@ -173,9 +246,18 @@ class BilibiliDevelopmentCreatorProvider:
             await self._sleep(step)
             remaining -= step
 
+    async def _wait(self, cancel_check: CancelCheck | None) -> float:
+        if await _is_cancelled(cancel_check):
+            raise asyncio.CancelledError
+        if self._last_request_started is None:
+            return 0.0
+        remaining = self._min_interval_seconds - (time.monotonic() - self._last_request_started)
+        waited = max(0.0, remaining)
+        if waited:
+            await self._sleep_with_cancellation(waited, cancel_check)
+        return waited
+
     async def _get(self, url: str, *, params: dict[str, Any] | None, cancel_check: CancelCheck | None):
-        await self._wait(cancel_check)
-        self._last_request_started = time.monotonic()
         task = asyncio.create_task(self._client.get(url, params=params))
         try:
             while not task.done():
@@ -192,25 +274,258 @@ class BilibiliDevelopmentCreatorProvider:
                 task.cancel()
             raise
 
-    async def _wbi_mixin_key(self, cancel_check: CancelCheck | None) -> str:
+    def _append_attempt(
+        self,
+        attempts: list[CreatorRequestAttempt],
+        *,
+        operation: Literal["wbi_nav", "uploads", "follower"],
+        attempt_number: int,
+        started_at: datetime,
+        rate_limit_wait_seconds: float,
+        retry_backoff_seconds: float,
+        classification: str,
+        http_status: int | None = None,
+        provider_code: int | None = None,
+        error_type: str | None = None,
+    ) -> None:
+        attempts.append(CreatorRequestAttempt(
+            operation=operation,
+            attempt_number=attempt_number,
+            started_at=started_at,
+            completed_at=self._now(),
+            rate_limit_wait_seconds=rate_limit_wait_seconds,
+            retry_backoff_seconds=retry_backoff_seconds,
+            classification=classification,
+            http_status=http_status,
+            provider_code=provider_code,
+            error_type=error_type,
+        ))
+
+    async def _request_json(
+        self,
+        operation: Literal["wbi_nav", "uploads", "follower"],
+        url: str,
+        *,
+        params: dict[str, Any] | None,
+        accepted_provider_codes: set[int] | None,
+        attempts: list[CreatorRequestAttempt],
+        cancel_check: CancelCheck | None,
+    ) -> dict[str, Any]:
+        for attempt_index in range(self._max_retries + 1):
+            backoff_seconds = self._backoff_base_seconds * (2 ** (attempt_index - 1)) if attempt_index else 0.0
+            if backoff_seconds:
+                await self._sleep_with_cancellation(backoff_seconds, cancel_check)
+            rate_limit_wait_seconds = await self._wait(cancel_check)
+            started_at = self._now()
+            self._last_request_started = time.monotonic()
+            try:
+                response = await self._get(url, params=params, cancel_check=cancel_check)
+            except asyncio.CancelledError:
+                self._append_attempt(
+                    attempts,
+                    operation=operation,
+                    attempt_number=attempt_index + 1,
+                    started_at=started_at,
+                    rate_limit_wait_seconds=rate_limit_wait_seconds,
+                    retry_backoff_seconds=backoff_seconds,
+                    classification="cancelled",
+                )
+                raise
+            except (httpx.TimeoutException, asyncio.TimeoutError) as exc:
+                self._append_attempt(
+                    attempts,
+                    operation=operation,
+                    attempt_number=attempt_index + 1,
+                    started_at=started_at,
+                    rate_limit_wait_seconds=rate_limit_wait_seconds,
+                    retry_backoff_seconds=backoff_seconds,
+                    classification="timeout",
+                    error_type=type(exc).__name__,
+                )
+                if attempt_index < self._max_retries:
+                    continue
+                raise _CreatorRequestFailure("timeout", f"{operation}_timeout") from exc
+            except httpx.RequestError as exc:
+                self._append_attempt(
+                    attempts,
+                    operation=operation,
+                    attempt_number=attempt_index + 1,
+                    started_at=started_at,
+                    rate_limit_wait_seconds=rate_limit_wait_seconds,
+                    retry_backoff_seconds=backoff_seconds,
+                    classification="connection_error",
+                    error_type=type(exc).__name__,
+                )
+                if attempt_index < self._max_retries:
+                    continue
+                raise _CreatorRequestFailure("connection_error", f"{operation}_{type(exc).__name__}") from exc
+
+            status_code = response.status_code
+            if status_code in CREATOR_RISK_CONTROL_HTTP_STATUSES:
+                self._append_attempt(
+                    attempts,
+                    operation=operation,
+                    attempt_number=attempt_index + 1,
+                    started_at=started_at,
+                    rate_limit_wait_seconds=rate_limit_wait_seconds,
+                    retry_backoff_seconds=backoff_seconds,
+                    classification="risk_control",
+                    http_status=status_code,
+                )
+                raise _CreatorRequestFailure(
+                    "risk_control",
+                    f"{operation}_http_{status_code}_risk_control",
+                    risk_control=True,
+                )
+            if status_code in CREATOR_RETRYABLE_HTTP_STATUSES:
+                classification = "http_429" if status_code == 429 else "http_5xx"
+                self._append_attempt(
+                    attempts,
+                    operation=operation,
+                    attempt_number=attempt_index + 1,
+                    started_at=started_at,
+                    rate_limit_wait_seconds=rate_limit_wait_seconds,
+                    retry_backoff_seconds=backoff_seconds,
+                    classification=classification,
+                    http_status=status_code,
+                )
+                if attempt_index < self._max_retries:
+                    continue
+                raise _CreatorRequestFailure(classification, f"{operation}_http_{status_code}")
+            if status_code != 200:
+                self._append_attempt(
+                    attempts,
+                    operation=operation,
+                    attempt_number=attempt_index + 1,
+                    started_at=started_at,
+                    rate_limit_wait_seconds=rate_limit_wait_seconds,
+                    retry_backoff_seconds=backoff_seconds,
+                    classification="http_error",
+                    http_status=status_code,
+                )
+                raise _CreatorRequestFailure("http_error", f"{operation}_http_{status_code}")
+            try:
+                payload = response.json()
+            except (ValueError, json.JSONDecodeError) as exc:
+                self._append_attempt(
+                    attempts,
+                    operation=operation,
+                    attempt_number=attempt_index + 1,
+                    started_at=started_at,
+                    rate_limit_wait_seconds=rate_limit_wait_seconds,
+                    retry_backoff_seconds=backoff_seconds,
+                    classification="invalid_json",
+                    http_status=status_code,
+                    error_type=type(exc).__name__,
+                )
+                raise _CreatorRequestFailure("invalid_json", f"{operation}_invalid_json") from exc
+            if not isinstance(payload, dict):
+                self._append_attempt(
+                    attempts,
+                    operation=operation,
+                    attempt_number=attempt_index + 1,
+                    started_at=started_at,
+                    rate_limit_wait_seconds=rate_limit_wait_seconds,
+                    retry_backoff_seconds=backoff_seconds,
+                    classification="invalid_payload",
+                    http_status=status_code,
+                )
+                raise _CreatorRequestFailure(
+                    "invalid_payload",
+                    f"{operation}_invalid_payload",
+                    raw_hash=raw_payload_hash(payload),
+                )
+            code = payload.get("code") if isinstance(payload.get("code"), int) else None
+            if code in CREATOR_RISK_CONTROL_PROVIDER_CODES:
+                self._append_attempt(
+                    attempts,
+                    operation=operation,
+                    attempt_number=attempt_index + 1,
+                    started_at=started_at,
+                    rate_limit_wait_seconds=rate_limit_wait_seconds,
+                    retry_backoff_seconds=backoff_seconds,
+                    classification="risk_control",
+                    http_status=status_code,
+                    provider_code=code,
+                )
+                raise _CreatorRequestFailure(
+                    "risk_control",
+                    f"{operation}_provider_{code}_risk_control",
+                    risk_control=True,
+                    raw_hash=raw_payload_hash(payload),
+                )
+            if accepted_provider_codes is not None and code not in accepted_provider_codes:
+                self._append_attempt(
+                    attempts,
+                    operation=operation,
+                    attempt_number=attempt_index + 1,
+                    started_at=started_at,
+                    rate_limit_wait_seconds=rate_limit_wait_seconds,
+                    retry_backoff_seconds=backoff_seconds,
+                    classification="provider_error",
+                    http_status=status_code,
+                    provider_code=code,
+                )
+                raise _CreatorRequestFailure(
+                    "provider_error",
+                    f"{operation}_provider_{code if code is not None else 'invalid'}",
+                    raw_hash=raw_payload_hash(payload),
+                )
+            self._append_attempt(
+                attempts,
+                operation=operation,
+                attempt_number=attempt_index + 1,
+                started_at=started_at,
+                rate_limit_wait_seconds=rate_limit_wait_seconds,
+                retry_backoff_seconds=backoff_seconds,
+                classification="success",
+                http_status=status_code,
+                provider_code=code,
+            )
+            return payload
+        raise AssertionError("bounded creator request loop exhausted unexpectedly")
+
+    async def _wbi_mixin_key(
+        self,
+        cancel_check: CancelCheck | None,
+        attempts: list[CreatorRequestAttempt],
+    ) -> str:
         if self._mixin_key and time.monotonic() < self._mixin_key_expires_at:
             return self._mixin_key
-        response = await self._get(BILIBILI_NAV_ENDPOINT, params=None, cancel_check=cancel_check)
-        response.raise_for_status()
-        payload = response.json()
+        payload = await self._request_json(
+            "wbi_nav",
+            BILIBILI_NAV_ENDPOINT,
+            params=None,
+            accepted_provider_codes=None,
+            attempts=attempts,
+            cancel_check=cancel_check,
+        )
         data = payload.get("data") if isinstance(payload, dict) else None
         wbi = data.get("wbi_img") if isinstance(data, dict) else None
         if not isinstance(wbi, dict) or not wbi.get("img_url") or not wbi.get("sub_url"):
-            raise ValueError("public nav response omitted WBI material")
+            raise _CreatorRequestFailure(
+                "invalid_payload",
+                "wbi_nav_material_missing",
+                raw_hash=raw_payload_hash(payload),
+            )
         original = PurePosixPath(wbi["img_url"]).stem + PurePosixPath(wbi["sub_url"]).stem
         if len(original) <= max(_MIXIN_KEY_ENC_TAB):
-            raise ValueError("public nav response returned invalid WBI material")
+            raise _CreatorRequestFailure(
+                "invalid_payload",
+                "wbi_nav_material_invalid",
+                raw_hash=raw_payload_hash(payload),
+            )
         self._mixin_key = "".join(original[index] for index in _MIXIN_KEY_ENC_TAB)[:32]
         self._mixin_key_expires_at = time.monotonic() + 600
         return self._mixin_key
 
-    async def _signed_upload_params(self, creator_mid: str, cancel_check: CancelCheck | None) -> dict[str, Any]:
-        mixin_key = await self._wbi_mixin_key(cancel_check)
+    async def _signed_upload_params(
+        self,
+        creator_mid: str,
+        cancel_check: CancelCheck | None,
+        attempts: list[CreatorRequestAttempt],
+    ) -> dict[str, Any]:
+        mixin_key = await self._wbi_mixin_key(cancel_check, attempts)
         params: dict[str, Any] = {
             "mid": creator_mid,
             "pn": 1,
@@ -228,6 +543,56 @@ class BilibiliDevelopmentCreatorProvider:
         sanitized["w_rid"] = hashlib.md5((query + mixin_key).encode("utf-8")).hexdigest()
         return sanitized
 
+    def _record_final_outcome(self, *, risk_control: bool, observed_at: datetime) -> Literal["closed", "opened"]:
+        if not risk_control:
+            self._consecutive_risk_control_count = 0
+            return "closed"
+        self._consecutive_risk_control_count += 1
+        if self._consecutive_risk_control_count >= CREATOR_RISK_CONTROL_THRESHOLD and not self.circuit_open:
+            self._circuit_opened_at = observed_at
+            return "opened"
+        return "closed"
+
+    def _request_audit(
+        self,
+        attempts: list[CreatorRequestAttempt],
+        final_classification: str,
+        *,
+        risk_control: bool,
+        circuit_state: Literal["closed", "opened", "open"],
+    ) -> CreatorRequestAudit:
+        return CreatorRequestAudit(
+            attempt_count=len(attempts),
+            retry_count=sum(attempt.attempt_number > 1 for attempt in attempts),
+            total_rate_limit_wait_seconds=sum(attempt.rate_limit_wait_seconds for attempt in attempts),
+            total_backoff_seconds=sum(attempt.retry_backoff_seconds for attempt in attempts),
+            final_classification=final_classification,
+            risk_control=risk_control,
+            consecutive_risk_control_count=self._consecutive_risk_control_count,
+            circuit_state=circuit_state,
+            circuit_opened_at=self._circuit_opened_at,
+            cooldown_seconds=CREATOR_RISK_CONTROL_COOLDOWN_SECONDS if self.circuit_open else 0,
+            attempts=attempts,
+        )
+
+    def not_attempted_sample(self, creator_mid: str, creator_name: str) -> CreatorSample:
+        observed_at = self._now()
+        profile_url = f"https://space.bilibili.com/{creator_mid}" if creator_mid else "https://space.bilibili.com/"
+        return self._failure(
+            creator_mid,
+            creator_name,
+            profile_url,
+            observed_at,
+            CreatorSampleStatus.MISSING,
+            "not_attempted_due_to_risk_control",
+            request_audit=self._request_audit(
+                [],
+                "circuit_open",
+                risk_control=True,
+                circuit_state="open",
+            ),
+        )
+
     async def fetch_creator(
         self,
         creator_mid: str,
@@ -237,43 +602,85 @@ class BilibiliDevelopmentCreatorProvider:
         observed_at = self._now()
         profile_url = f"https://space.bilibili.com/{creator_mid}" if creator_mid else "https://space.bilibili.com/"
         if not creator_mid:
-            return self._failure("", creator_name, profile_url, observed_at, CreatorSampleStatus.MISSING, "creator_mid_missing")
-        if await _is_cancelled(cancel_check):
-            return self._failure(creator_mid, creator_name, profile_url, observed_at, CreatorSampleStatus.CANCELLED, "cancelled")
-        try:
-            params = await self._signed_upload_params(creator_mid, cancel_check)
-            response = await self._get(BILIBILI_UPLOAD_ENDPOINT, params=params, cancel_check=cancel_check)
-            if response.status_code != 200:
-                return self._failure(
-                    creator_mid, creator_name, profile_url, observed_at, CreatorSampleStatus.FAILED,
-                    f"uploads_http_{response.status_code}",
-                )
-            payload = response.json()
-        except asyncio.CancelledError:
-            return self._failure(creator_mid, creator_name, profile_url, observed_at, CreatorSampleStatus.CANCELLED, "cancelled")
-        except (httpx.TimeoutException, asyncio.TimeoutError):
-            return self._failure(creator_mid, creator_name, profile_url, observed_at, CreatorSampleStatus.TIMEOUT, "uploads_timeout")
-        except (httpx.RequestError, ValueError, json.JSONDecodeError) as exc:
             return self._failure(
-                creator_mid, creator_name, profile_url, observed_at, CreatorSampleStatus.FAILED,
-                f"uploads_{type(exc).__name__}",
+                "",
+                creator_name,
+                profile_url,
+                observed_at,
+                CreatorSampleStatus.MISSING,
+                "creator_mid_missing",
+                request_audit=self._request_audit(
+                    [], "missing_mid", risk_control=False, circuit_state="open" if self.circuit_open else "closed"
+                ),
             )
-
-        if not isinstance(payload, dict) or payload.get("code") != 0:
-            code = payload.get("code") if isinstance(payload, dict) else "invalid"
+        if self.circuit_open:
+            return self.not_attempted_sample(creator_mid, creator_name)
+        if await _is_cancelled(cancel_check):
             return self._failure(
-                creator_mid, creator_name, profile_url, observed_at, CreatorSampleStatus.FAILED,
-                f"uploads_provider_{code}",
-                raw_hash=raw_payload_hash(payload),
+                creator_mid,
+                creator_name,
+                profile_url,
+                observed_at,
+                CreatorSampleStatus.CANCELLED,
+                "cancelled",
+                request_audit=self._request_audit(
+                    [], "cancelled", risk_control=False, circuit_state="closed"
+                ),
+            )
+        attempts: list[CreatorRequestAttempt] = []
+        try:
+            params = await self._signed_upload_params(creator_mid, cancel_check, attempts)
+            payload = await self._request_json(
+                "uploads",
+                BILIBILI_UPLOAD_ENDPOINT,
+                params=params,
+                accepted_provider_codes={0},
+                attempts=attempts,
+                cancel_check=cancel_check,
+            )
+        except asyncio.CancelledError:
+            self._record_final_outcome(risk_control=False, observed_at=observed_at)
+            return self._failure(
+                creator_mid,
+                creator_name,
+                profile_url,
+                observed_at,
+                CreatorSampleStatus.CANCELLED,
+                "cancelled",
+                request_audit=self._request_audit(
+                    attempts, "cancelled", risk_control=False, circuit_state="closed"
+                ),
+            )
+        except _CreatorRequestFailure as exc:
+            circuit_state = self._record_final_outcome(risk_control=exc.risk_control, observed_at=observed_at)
+            status = CreatorSampleStatus.TIMEOUT if exc.classification == "timeout" else CreatorSampleStatus.FAILED
+            return self._failure(
+                creator_mid,
+                creator_name,
+                profile_url,
+                observed_at,
+                status,
+                exc.reason,
+                raw_hash=exc.raw_hash,
+                request_audit=self._request_audit(
+                    attempts,
+                    exc.classification,
+                    risk_control=exc.risk_control,
+                    circuit_state=circuit_state,
+                ),
             )
         data = payload.get("data")
         upload_list = data.get("list") if isinstance(data, dict) else None
         raw_uploads = upload_list.get("vlist") if isinstance(upload_list, dict) else None
         if not isinstance(raw_uploads, list):
+            self._record_final_outcome(risk_control=False, observed_at=observed_at)
             return self._failure(
                 creator_mid, creator_name, profile_url, observed_at, CreatorSampleStatus.FAILED,
                 "uploads_list_missing",
                 raw_hash=raw_payload_hash(payload),
+                request_audit=self._request_audit(
+                    attempts, "invalid_payload", risk_control=False, circuit_state="closed"
+                ),
             )
 
         uploads = [
@@ -283,22 +690,75 @@ class BilibiliDevelopmentCreatorProvider:
         ]
         follower_count: int | None = None
         follower_error: str | None = None
+        risk_marked = bool(data.get("is_risk")) if isinstance(data, dict) else False
+        if risk_marked:
+            circuit_state = self._record_final_outcome(risk_control=True, observed_at=observed_at)
+            return CreatorSample(
+                creator_mid=creator_mid,
+                creator_name=creator_name,
+                profile_url=profile_url,
+                status=CreatorSampleStatus.PARTIAL,
+                observed_at=observed_at,
+                provider_name=self.capabilities.provider_name,
+                provider_version=self.capabilities.provider_version,
+                provider_kind=self.capabilities.provider_kind,
+                source_provider_name=self.capabilities.provider_name,
+                source_provider_version=self.capabilities.provider_version,
+                source_url=profile_url,
+                uploads=uploads,
+                recent_30d_upload_count=sum(
+                    video.published_at is not None and video.published_at >= observed_at - timedelta(days=30)
+                    for video in uploads
+                ),
+                recent_90d_upload_count=sum(
+                    video.published_at is not None and video.published_at >= observed_at - timedelta(days=90)
+                    for video in uploads
+                ),
+                missing_reason="provider_risk_flag",
+                raw_payload_hash=raw_payload_hash(payload),
+                request_audit=self._request_audit(
+                    attempts, "risk_control", risk_control=True, circuit_state=circuit_state
+                ),
+            )
         try:
-            follower_response = await self._get(
+            follower_payload = await self._request_json(
+                "follower",
                 BILIBILI_FOLLOWER_ENDPOINT,
                 params={"vmid": creator_mid},
+                accepted_provider_codes={0},
+                attempts=attempts,
                 cancel_check=cancel_check,
             )
-            follower_payload = follower_response.json() if follower_response.status_code == 200 else {}
             follower_data = follower_payload.get("data") if isinstance(follower_payload, dict) else None
-            if follower_payload.get("code") == 0 and isinstance(follower_data, dict):
+            if isinstance(follower_data, dict):
                 follower_count = _safe_int(follower_data.get("follower"))
             else:
                 follower_error = "follower_unavailable"
         except asyncio.CancelledError:
-            return self._failure(creator_mid, creator_name, profile_url, observed_at, CreatorSampleStatus.CANCELLED, "cancelled")
-        except (httpx.HTTPError, ValueError, json.JSONDecodeError):
-            follower_error = "follower_unavailable"
+            self._record_final_outcome(risk_control=False, observed_at=observed_at)
+            return self._failure(
+                creator_mid,
+                creator_name,
+                profile_url,
+                observed_at,
+                CreatorSampleStatus.CANCELLED,
+                "cancelled",
+                request_audit=self._request_audit(
+                    attempts, "cancelled", risk_control=False, circuit_state="closed"
+                ),
+            )
+        except _CreatorRequestFailure as exc:
+            if exc.risk_control:
+                circuit_state = self._record_final_outcome(risk_control=True, observed_at=observed_at)
+                follower_error = exc.reason
+                final_classification = "risk_control"
+            else:
+                circuit_state = self._record_final_outcome(risk_control=False, observed_at=observed_at)
+                follower_error = "follower_unavailable"
+                final_classification = "partial"
+        else:
+            circuit_state = self._record_final_outcome(risk_control=False, observed_at=observed_at)
+            final_classification = "success"
 
         recent_30d = sum(
             video.published_at is not None and video.published_at >= observed_at - timedelta(days=30)
@@ -308,14 +768,17 @@ class BilibiliDevelopmentCreatorProvider:
             video.published_at is not None and video.published_at >= observed_at - timedelta(days=90)
             for video in uploads
         )
-        risk_marked = bool(data.get("is_risk")) if isinstance(data, dict) else False
         if not uploads:
             status = CreatorSampleStatus.PARTIAL
             missing_reason = "no_public_uploads"
-        elif follower_error or risk_marked or len(uploads) < len(raw_uploads[:LATEST_UPLOAD_LIMIT]):
+            if final_classification == "success":
+                final_classification = "partial"
+        elif follower_error or len(uploads) < len(raw_uploads[:LATEST_UPLOAD_LIMIT]):
             status = CreatorSampleStatus.PARTIAL
-            reasons = [value for value in (follower_error, "provider_risk_flag" if risk_marked else None) if value]
+            reasons = [value for value in (follower_error,) if value]
             missing_reason = ",".join(reasons) or "some_uploads_failed_normalization"
+            if final_classification == "success":
+                final_classification = "partial"
         else:
             status = CreatorSampleStatus.SUCCESS
             missing_reason = None
@@ -337,6 +800,12 @@ class BilibiliDevelopmentCreatorProvider:
             recent_90d_upload_count=recent_90d,
             missing_reason=missing_reason,
             raw_payload_hash=raw_payload_hash(payload),
+            request_audit=self._request_audit(
+                attempts,
+                final_classification,
+                risk_control=final_classification == "risk_control",
+                circuit_state=circuit_state,
+            ),
         )
 
     def _failure(
@@ -349,6 +818,7 @@ class BilibiliDevelopmentCreatorProvider:
         reason: str,
         *,
         raw_hash: str | None = None,
+        request_audit: CreatorRequestAudit | None = None,
     ) -> CreatorSample:
         return CreatorSample(
             creator_mid=creator_mid,
@@ -364,6 +834,7 @@ class BilibiliDevelopmentCreatorProvider:
             source_url=profile_url,
             missing_reason=reason,
             raw_payload_hash=raw_hash,
+            request_audit=request_audit,
         )
 
     def _normalize_video(
@@ -446,6 +917,7 @@ class CreatorImportEntry(StrictModel):
     uploads: list[CreatorImportVideoPayload] = Field(default_factory=list, max_length=LATEST_UPLOAD_LIMIT)
     missing_reason: str | None = None
     raw_payload_hash: str | None = Field(default=None, pattern=r"^[a-f0-9]{64}$")
+    request_audit: CreatorRequestAudit | None = None
 
     @model_validator(mode="after")
     def validate_status(self) -> "CreatorImportEntry":
@@ -463,10 +935,57 @@ class CreatorImportEntry(StrictModel):
         return self
 
 
+def creator_scope_hash(creator_mids: list[str] | set[str] | tuple[str, ...]) -> str:
+    normalized = "\n".join(sorted({str(mid).strip() for mid in creator_mids if str(mid).strip()}))
+    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+
+
+class CreatorImportCoverageReport(StrictModel):
+    expected_count: int = Field(ge=0)
+    imported_count: int = Field(ge=0)
+    covered_count: int = Field(ge=0)
+    missing_count: int = Field(ge=0)
+    unexpected_count: int = Field(ge=0)
+    exact_coverage: bool
+    source_basis: Literal[
+        "unspecified",
+        "public_unauthenticated_capture",
+        "user_authorized_export",
+        "authorized_supplier_export",
+        "fixture",
+    ]
+    authorization_status: Literal[
+        "unknown",
+        "development_only",
+        "user_attested",
+        "written_authorization",
+        "fixture",
+    ]
+    source_declared: bool
+    authorization_documented: bool
+
+
 class CreatorImportPayload(StrictModel):
     schema_version: str = Field(default=CREATOR_IMPORT_SCHEMA_VERSION, pattern=r"^creator-import\.p0\.1$")
     source_name: str = Field(min_length=1, max_length=120)
     provider_version: str = Field(default=CREATOR_IMPORT_PROVIDER_VERSION, min_length=1, max_length=40)
+    source_basis: Literal[
+        "unspecified",
+        "public_unauthenticated_capture",
+        "user_authorized_export",
+        "authorized_supplier_export",
+        "fixture",
+    ] = "unspecified"
+    authorization_status: Literal[
+        "unknown",
+        "development_only",
+        "user_attested",
+        "written_authorization",
+        "fixture",
+    ] = "unknown"
+    capture_round_id: str | None = Field(default=None, min_length=1, max_length=120)
+    coverage_scope_sha256: str | None = Field(default=None, pattern=r"^[a-f0-9]{64}$")
+    coverage_target_count: int | None = Field(default=None, ge=1)
     creators: list[CreatorImportEntry] = Field(min_length=1)
 
     @model_validator(mode="after")
@@ -474,6 +993,31 @@ class CreatorImportPayload(StrictModel):
         mids = [creator.creator_mid for creator in self.creators]
         if len(mids) != len(set(mids)):
             raise ValueError("creator import MIDs must be unique")
+        coverage_declared = self.coverage_scope_sha256 is not None or self.coverage_target_count is not None
+        if coverage_declared and (self.coverage_scope_sha256 is None or self.coverage_target_count is None):
+            raise ValueError("creator import coverage hash and target count must be declared together")
+        if coverage_declared:
+            if self.coverage_target_count != len(mids):
+                raise ValueError("creator import coverage target count must match creator records")
+            if self.coverage_scope_sha256 != creator_scope_hash(mids):
+                raise ValueError("creator import coverage hash does not match creator records")
+        if self.capture_round_id and not coverage_declared:
+            raise ValueError("creator import capture rounds require declared coverage")
+        if self.source_basis == "public_unauthenticated_capture":
+            if self.authorization_status != "development_only":
+                raise ValueError("public unauthenticated capture must remain development_only")
+            if not self.capture_round_id:
+                raise ValueError("public unauthenticated capture requires capture_round_id")
+        elif self.source_basis == "user_authorized_export":
+            if self.authorization_status not in {"user_attested", "written_authorization"}:
+                raise ValueError("user-authorized exports require attested or written authorization")
+        elif self.source_basis == "authorized_supplier_export":
+            if self.authorization_status != "written_authorization":
+                raise ValueError("supplier exports require written authorization")
+        elif self.source_basis == "fixture" and self.authorization_status != "fixture":
+            raise ValueError("fixture imports require fixture authorization status")
+        elif self.source_basis == "unspecified" and self.authorization_status != "unknown":
+            raise ValueError("unspecified imports cannot claim authorization")
         return self
 
 
@@ -482,7 +1026,8 @@ CREATOR_CSV_COLUMNS = {
     "observed_at", "source_url", "source_provider_name", "source_provider_version", "follower_count",
     "missing_reason", "raw_payload_hash", "bvid", "title", "video_source_url", "description", "tags",
     "partition", "published_at", "duration_seconds", "cover_url", "view", "like", "coin", "favorite",
-    "reply", "share", "danmaku", "missing_fields",
+    "reply", "share", "danmaku", "missing_fields", "source_basis", "authorization_status",
+    "capture_round_id", "coverage_scope_sha256", "coverage_target_count",
 }
 CREATOR_CSV_REQUIRED = {
     "source_name", "provider_version", "creator_mid", "creator_name", "profile_url", "status",
@@ -514,9 +1059,21 @@ class ImportCreatorProvider:
         rows = list(reader)
         if not rows:
             raise ValueError("creator CSV import requires at least one row")
-        metadata = {name: (rows[0].get(name) or "").strip() for name in ("source_name", "provider_version")}
+        metadata_names = ["source_name", "provider_version"]
+        metadata_names.extend(
+            name
+            for name in (
+                "source_basis", "authorization_status", "capture_round_id",
+                "coverage_scope_sha256", "coverage_target_count",
+            )
+            if name in headers
+        )
+        metadata = {name: (rows[0].get(name) or "").strip() for name in metadata_names}
         if any((row.get(name) or "").strip() != metadata[name] for row in rows for name in metadata):
             raise ValueError("creator CSV source metadata must be identical across rows")
+        metadata = {name: value for name, value in metadata.items() if value}
+        if "coverage_target_count" in metadata:
+            metadata["coverage_target_count"] = int(metadata["coverage_target_count"])
         grouped: dict[str, list[dict[str, str]]] = {}
         for row in rows:
             grouped.setdefault((row.get("creator_mid") or "").strip(), []).append(row)
@@ -570,13 +1127,61 @@ class ImportCreatorProvider:
             })
         return cls(CreatorImportPayload.model_validate({**metadata, "creators": creators}))
 
+    def validate_coverage(
+        self,
+        expected_creator_mids: set[str] | list[str] | tuple[str, ...],
+        *,
+        require_exact: bool = True,
+        require_source_declared: bool = False,
+        require_authorized: bool = False,
+    ) -> CreatorImportCoverageReport:
+        expected = {str(mid).strip() for mid in expected_creator_mids if str(mid).strip()}
+        imported = set(self._creators)
+        covered = expected.intersection(imported)
+        missing_count = len(expected - imported)
+        unexpected_count = len(imported - expected)
+        source_declared = self.payload.source_basis != "unspecified"
+        authorization_documented = self.payload.authorization_status in {
+            "user_attested",
+            "written_authorization",
+            "fixture",
+        }
+        report = CreatorImportCoverageReport(
+            expected_count=len(expected),
+            imported_count=len(imported),
+            covered_count=len(covered),
+            missing_count=missing_count,
+            unexpected_count=unexpected_count,
+            exact_coverage=missing_count == 0 and unexpected_count == 0,
+            source_basis=self.payload.source_basis,
+            authorization_status=self.payload.authorization_status,
+            source_declared=source_declared,
+            authorization_documented=authorization_documented,
+        )
+        if require_exact and not report.exact_coverage:
+            raise ValueError(
+                "creator import coverage mismatch: "
+                f"missing={report.missing_count}, unexpected={report.unexpected_count}"
+            )
+        if require_source_declared and not report.source_declared:
+            raise ValueError("creator import source basis is not declared")
+        if require_authorized and not report.authorization_documented:
+            raise ValueError("creator import authorization is not documented")
+        return report
+
     @property
     def capabilities(self) -> CreatorProviderCapabilities:
+        if self.payload.authorization_status == "written_authorization":
+            commercial_authorization = "authorized"
+        elif self._fixture or self.payload.authorization_status == "development_only":
+            commercial_authorization = "development_only"
+        else:
+            commercial_authorization = "unknown"
         return CreatorProviderCapabilities(
             provider_name="fixture" if self._fixture else "import",
             provider_version=self.payload.provider_version,
             provider_kind="fixture" if self._fixture else "import",
-            commercial_authorization="development_only" if self._fixture else "unknown",
+            commercial_authorization=commercial_authorization,
         )
 
     async def close(self) -> None:
@@ -633,6 +1238,7 @@ class ImportCreatorProvider:
             recent_90d_upload_count=recent_90d,
             missing_reason=entry.missing_reason,
             raw_payload_hash=entry.raw_payload_hash or raw_payload_hash(entry.model_dump(mode="json")),
+            request_audit=entry.request_audit,
         )
 
     def _missing(

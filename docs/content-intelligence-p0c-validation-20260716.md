@@ -74,6 +74,16 @@ P0-C Gate 候选：**未通过**，因此停在 P0-C Gate Review，不进入 P0-
 
 P0-C Gate 最终为未通过，阻塞 P0-D。后续若总控决定继续，应先解决合法稳定的 Creator 数据来源或增加真实人工账号级复核，不能继续围绕当前 20 关键词反复调权重。
 
+## Recovery Gate 补充（2026-07-16）
+
+在不改变评分、资格、评测公式、关键词或人工标签的前提下，Creator Provider 已升级为 `bilibili-public-creator.p0-c.2`：增加 412/`-352` 风控分类、连续 3 次固定断路、断路后 `not_attempted_due_to_risk_control`、只针对 timeout/connection/429/5xx 的最多 2 次退避重试、逐 attempt 审计、逐账号原子 checkpoint、同 round 幂等恢复和新 round 隔离。Import Provider 增加来源/授权声明和候选集合 exact coverage 校验。
+
+Recovery 自动化为 P0-C 定向 41 passed、P0-B 42 passed、P0-A 36 passed、完整 Python 158 passed；Compose 和 diff 检查通过。
+
+仓库外 5 账号低频 canary 结果为 3 success、2 failed；失败分别是一次 HTTP 412 和一次 Provider `-352`，均未重试，风控不连续且断路未打开。该结果证明分类与停止边界生效，但不能证明批量覆盖、生产 SLA 或商业授权。
+
+因此没有重新运行完整 20 关键词 Gate。原 `20260716-183040` 失败基线完整保留，Gate 结论仍为未通过，P0-D 仍被阻塞。详细记录见 [P0-C Creator Provider Recovery](content-intelligence-p0c-recovery-20260716.md)。
+
 ## 真实性边界
 
 - 当前只支持 B 站公开搜索快照，不是全站穷举。

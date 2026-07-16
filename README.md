@@ -99,6 +99,7 @@ Compose 包含 8 个服务：`frontend`、`app`、`worker`、`postgres`、`redis
 - [2026-07-16 P0-B 验证记录](docs/content-intelligence-p0b-validation-20260716.md)
 - [P0-C Creator Provider、竞品相关性与 Top 5](docs/content-intelligence-competitor-scoring.md)
 - [2026-07-16 P0-C 验证记录](docs/content-intelligence-p0c-validation-20260716.md)
+- [2026-07-16 P0-C Creator Provider Recovery](docs/content-intelligence-p0c-recovery-20260716.md)
 - [权限、数据与 Evidence 边界](docs/security-and-data.md)
 - [2026-07-13 验收记录](docs/validation-20260713.md)
 
@@ -238,7 +239,7 @@ cd ..
 docker compose config --quiet
 ```
 
-当前完整 Python 回归为 152 条测试；P0-C 的工程链路已实现，但 20 关键词质量 Gate 未通过，不能进入 P0-D。P0-C 详细负面结果见 [验证记录](docs/content-intelligence-p0c-validation-20260716.md)。
+当前完整 Python 回归为 158 条测试。P0-C 的工程链路和 Creator Provider Recovery 可靠性已实现，但 Recovery 低频 canary 仍出现 HTTP 412 与 Provider `-352`，没有重跑 20 关键词质量 Gate；原 Gate 仍未通过，不能进入 P0-D。详细结果见 [验证记录](docs/content-intelligence-p0c-validation-20260716.md)和 [Recovery 记录](docs/content-intelligence-p0c-recovery-20260716.md)。
 
 ### 真实 API 冒烟（2026-07-13）
 

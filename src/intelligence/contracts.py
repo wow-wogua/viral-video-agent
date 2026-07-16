@@ -244,6 +244,69 @@ class CreatorVideo(StrictModel):
     missing_fields: list[str] = Field(default_factory=list)
 
 
+class CreatorRequestAttempt(StrictModel):
+    operation: Literal["wbi_nav", "uploads", "follower"]
+    attempt_number: int = Field(ge=1, le=5)
+    started_at: datetime
+    completed_at: datetime
+    rate_limit_wait_seconds: float = Field(default=0.0, ge=0)
+    retry_backoff_seconds: float = Field(default=0.0, ge=0)
+    classification: Literal[
+        "success",
+        "cancelled",
+        "timeout",
+        "connection_error",
+        "http_429",
+        "http_5xx",
+        "http_error",
+        "risk_control",
+        "invalid_json",
+        "invalid_payload",
+        "provider_error",
+    ]
+    http_status: int | None = Field(default=None, ge=100, le=599)
+    provider_code: int | None = None
+    error_type: str | None = None
+
+
+class CreatorRequestAudit(StrictModel):
+    attempt_count: int = Field(ge=0)
+    retry_count: int = Field(ge=0)
+    total_rate_limit_wait_seconds: float = Field(default=0.0, ge=0)
+    total_backoff_seconds: float = Field(default=0.0, ge=0)
+    final_classification: Literal[
+        "success",
+        "partial",
+        "cancelled",
+        "timeout",
+        "connection_error",
+        "http_429",
+        "http_5xx",
+        "http_error",
+        "risk_control",
+        "invalid_json",
+        "invalid_payload",
+        "provider_error",
+        "circuit_open",
+        "missing_mid",
+    ]
+    risk_control: bool = False
+    consecutive_risk_control_count: int = Field(default=0, ge=0)
+    circuit_state: Literal["closed", "opened", "open"] = "closed"
+    circuit_opened_at: datetime | None = None
+    cooldown_seconds: int = Field(default=0, ge=0)
+    attempts: list[CreatorRequestAttempt] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_attempts(self) -> "CreatorRequestAudit":
+        if self.attempt_count != len(self.attempts):
+            raise ValueError("creator request attempt_count must match attempts")
+        retries = sum(attempt.attempt_number > 1 for attempt in self.attempts)
+        if self.retry_count != retries:
+            raise ValueError("creator request retry_count must match attempts")
+        return self
+
+
 class CreatorSample(StrictModel):
     schema_version: Literal[CONTENT_INTELLIGENCE_SCHEMA_VERSION] = CONTENT_INTELLIGENCE_SCHEMA_VERSION
     creator_mid: str
@@ -263,6 +326,7 @@ class CreatorSample(StrictModel):
     recent_90d_upload_count: int = Field(default=0, ge=0, le=20)
     missing_reason: str | None = None
     raw_payload_hash: str | None = Field(default=None, pattern=r"^[a-f0-9]{64}$")
+    request_audit: CreatorRequestAudit | None = None
 
     @model_validator(mode="after")
     def validate_sample(self) -> "CreatorSample":
