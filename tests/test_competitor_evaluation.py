@@ -1,5 +1,14 @@
 from scripts.run_p0c_scheme_c_gate import quality_gate_checks
-from src.intelligence.competitor_evaluation import aggregate_evaluation, evaluate_keyword
+from src.intelligence.competitor_evaluation import (
+    aggregate_evaluation,
+    evaluate_keyword,
+    map_review_to_evaluation_truth_v3,
+)
+from src.intelligence.contracts import (
+    CreatorProductRelation,
+    CreatorTopicEvidence,
+    HumanCreatorTopicReview,
+)
 from src.intelligence.evaluation import EvaluationKeyword
 
 
@@ -112,3 +121,84 @@ def test_retrieval_recall_and_category_aggregation_remain_separate():
     assert result["overall"]["retrieval_recall"] == 0.75
     assert result["overall"]["abstention_keyword_count"] == 1
     assert set(result["by_category"]) == {"broad", "vertical"}
+
+
+def v3_evidence(**updates) -> CreatorTopicEvidence:
+    values = {
+        "creator_mid": "90001",
+        "creator_name": "sanitized creator",
+        "profile_url": "https://example.test/creator",
+        "sample_status": "success",
+        "observed_at": "2026-07-18T12:00:00Z",
+        "search_video_count": 2,
+        "search_relevant_video_count": 2,
+        "search_irrelevant_video_count": 0,
+        "search_uncertain_video_count": 0,
+        "sampled_upload_count": 10,
+        "decided_upload_count": 10,
+        "relevant_upload_count": 6,
+        "irrelevant_upload_count": 4,
+        "uncertain_upload_count": 0,
+        "relevant_ratio": 0.6,
+        "recent_30d_upload_count": 4,
+        "recent_90d_upload_count": 10,
+        "relevant_30d_upload_count": 2,
+        "relevant_90d_upload_count": 5,
+        "follower_count": 20_000,
+        "relevant_view_median": 6_000,
+        "published_at_completeness": 1.0,
+        "label_coverage": 1.0,
+        "sample_coverage": 0.5,
+        "evidence_ids": ["ev_1"],
+        "source_urls": ["https://example.test/video"],
+    }
+    values.update(updates)
+    return CreatorTopicEvidence.model_validate(values)
+
+
+def v3_review(**updates) -> HumanCreatorTopicReview:
+    values = {
+        "review_id": "review_1234567890abcdef",
+        "keyword_id": "sanitized-keyword-id",
+        "creator_mid": "90001",
+        "human_relevance": "relevant",
+        "human_specialization": "high",
+        "human_role": "reviewer",
+        "human_reason": "sustained topic evidence",
+        "review_complete": True,
+    }
+    values.update(updates)
+    return HumanCreatorTopicReview.model_validate(values)
+
+
+def test_v3_truth_mapping_uses_human_dimensions_and_independent_evidence_only():
+    truth = map_review_to_evaluation_truth_v3(
+        v3_review(),
+        v3_evidence(),
+        category="vertical",
+    )
+    assert truth.formula_version == "competitor-evaluation.p0.2"
+    assert truth.relation == CreatorProductRelation.CORE_COMPETITOR
+    assert truth.objective_checks["relevant_ratio"]
+
+
+def test_v3_truth_mapping_keeps_role_and_continuity_boundaries_explicit():
+    aggregator = map_review_to_evaluation_truth_v3(
+        v3_review(human_role="aggregator"),
+        v3_evidence(),
+        category="vertical",
+    )
+    service = map_review_to_evaluation_truth_v3(
+        v3_review(human_role="service"),
+        v3_evidence(),
+        category="vertical",
+    )
+    stale = map_review_to_evaluation_truth_v3(
+        v3_review(),
+        v3_evidence(relevant_30d_upload_count=0),
+        category="vertical",
+    )
+
+    assert aggregator.relation == CreatorProductRelation.EXCLUDED
+    assert service.relation == CreatorProductRelation.ADJACENT_BENCHMARK
+    assert stale.relation == CreatorProductRelation.OCCASIONAL_HIT

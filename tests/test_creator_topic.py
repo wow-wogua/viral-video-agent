@@ -28,6 +28,10 @@ from src.intelligence.creator_topic import (
     select_v2_top_competitors,
     validate_human_review_rows,
 )
+from src.intelligence.creator_topic_v3 import (
+    calibrate_creator_topic_v3,
+    select_v3_top_competitors,
+)
 
 
 NOW = datetime(2026, 7, 18, 12, tzinfo=timezone.utc)
@@ -372,3 +376,84 @@ def test_strict_human_review_import_rejects_missing_duplicate_and_invalid_rows()
         validate_human_review_rows([], [route])
     with pytest.raises(ValidationError):
         validate_human_review_rows([{**valid, "human_relevance": "irrelevant", "human_specialization": "high"}], [route])
+
+
+def test_v3_versions_prediction_qualification_and_selection_are_separate():
+    payload, evidence = candidate()
+    v2 = assess_creator_topic(TOPIC, payload, evidence)
+    v3 = calibrate_creator_topic_v3(v2, category=TOPIC.category)
+
+    assert v3.version == "creator-topic-assessment.p0.2"
+    assert v3.qualification_policy_version == "creator-qualification.p0.2"
+    assert v3.selection_version == "competitor-selection.p0.3"
+    assert v3.prediction.relevance == AccountTopicRelevance.RELEVANT
+    assert v3.qualification.relation == CreatorProductRelation.CORE_COMPETITOR
+    assert v3.qualification.core_eligible
+    assert v3.qualification.checks["continuity_30d"]
+
+
+def test_v3_abstains_on_small_sample_low_confidence_and_missing_30d_continuity():
+    small_payload, small_evidence = candidate(sample_count=8, relevant=6, irrelevant=2)
+    small = calibrate_creator_topic_v3(
+        assess_creator_topic(TOPIC, small_payload, small_evidence),
+        category=TOPIC.category,
+    )
+    assert small.qualification.relation == CreatorProductRelation.INSUFFICIENT_EVIDENCE
+    assert "fewer_than_10_decided_uploads" in small.qualification.reasons
+
+    low_payload, low_evidence = candidate()
+    low_payload["creator_sample"]["assessment_confidence"] = 0.8
+    for label in [
+        *low_payload["search_relevance_labels"],
+        *low_payload["creator_relevance_labels"],
+    ]:
+        label["confidence"] = 0.8
+    low = calibrate_creator_topic_v3(
+        assess_creator_topic(TOPIC, low_payload, low_evidence),
+        category=TOPIC.category,
+    )
+    assert low.qualification.relation == CreatorProductRelation.INSUFFICIENT_EVIDENCE
+    assert BoundaryRisk.LOW_SEMANTIC_CONFIDENCE in low.prediction.boundary_risks
+
+    stale_payload, stale_evidence = candidate(days=31)
+    stale = calibrate_creator_topic_v3(
+        assess_creator_topic(TOPIC, stale_payload, stale_evidence),
+        category=TOPIC.category,
+    )
+    assert stale.qualification.relation == CreatorProductRelation.OCCASIONAL_HIT
+    assert BoundaryRisk.INSUFFICIENT_30D_CONTINUITY in stale.prediction.boundary_risks
+
+
+def test_v3_generic_aggregation_signal_blocks_core_without_identity_rules():
+    payload, evidence = candidate()
+    payload["creator_relevance_labels"][0]["title"] = "sanitized topic 合集"
+    evidence[0]["title"] = "sanitized topic 合集"
+    v3 = calibrate_creator_topic_v3(
+        assess_creator_topic(TOPIC, payload, evidence),
+        category=TOPIC.category,
+    )
+
+    assert BoundaryRisk.AGGREGATION_OR_REUPLOAD in v3.prediction.boundary_risks
+    assert v3.qualification.relation == CreatorProductRelation.EXCLUDED
+
+
+def test_v3_service_role_is_adjacent_and_core_selection_is_unpadded():
+    service_payload, service_evidence = candidate("90001", score=99)
+    for index in (0, 1):
+        service_payload["creator_relevance_labels"][index]["title"] = "sanitized 咨询 service"
+        service_evidence[index]["title"] = "sanitized 咨询 service"
+    core_payload, core_evidence = candidate("90002", score=80)
+    service = calibrate_creator_topic_v3(
+        assess_creator_topic(TOPIC, service_payload, service_evidence),
+        category=TOPIC.category,
+    )
+    core = calibrate_creator_topic_v3(
+        assess_creator_topic(TOPIC, core_payload, core_evidence),
+        category=TOPIC.category,
+    )
+
+    assert service.prediction.role == CreatorTopicRole.SERVICE
+    assert service.qualification.relation == CreatorProductRelation.ADJACENT_BENCHMARK
+    selected = select_v3_top_competitors([service, core])
+    assert [item.creator_mid for item in selected if item.selected] == ["90002"]
+    assert sum(item.selected for item in selected) == 1

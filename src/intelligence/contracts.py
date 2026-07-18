@@ -18,6 +18,9 @@ CREATOR_TOPIC_ASSESSMENT_VERSION = "creator-topic-assessment.p0.1"
 SYSTEM_CONFIDENCE_VERSION = "system-confidence.p0.1"
 REVIEW_ROUTING_VERSION = "review-routing.p0.1"
 CREATOR_SELECTION_VERSION_V2 = "competitor-selection.p0.2"
+CREATOR_QUALIFICATION_POLICY_VERSION_V3 = "creator-qualification.p0.2"
+CREATOR_TOPIC_ASSESSMENT_VERSION_V3 = "creator-topic-assessment.p0.2"
+CREATOR_SELECTION_VERSION_V3 = "competitor-selection.p0.3"
 MAX_SEARCH_PAGES = 5
 MAX_COMPETITORS = 5
 REPRESENTATIVE_VIDEO_TARGET = 6
@@ -137,6 +140,9 @@ class BoundaryRisk(StrEnum):
     AGGREGATION_OR_REUPLOAD = "aggregation_or_reupload"
     MISSING_EVIDENCE = "missing_evidence"
     SEMANTIC_RULE_CONFLICT = "semantic_rule_conflict"
+    SERVICE_ACCOUNT = "service_account"
+    INSUFFICIENT_30D_CONTINUITY = "insufficient_30d_continuity"
+    LOW_SEMANTIC_CONFIDENCE = "low_semantic_confidence"
 
 
 class MetricName(StrEnum):
@@ -605,6 +611,65 @@ class CreatorTopicAssessment(StrictModel):
             raise ValueError("only core_competitor accounts can be selected by v2")
         if self.selected != (self.selection_rank is not None):
             raise ValueError("v2 selected and selection_rank must be set together")
+        return self
+
+
+class CreatorTopicPredictionV3(StrictModel):
+    relevance: AccountTopicRelevance
+    specialization: SpecializationLevel
+    role: CreatorTopicRole
+    model_confidence: float = Field(ge=0, le=1)
+    system_confidence: SystemConfidence
+    boundary_risks: list[BoundaryRisk] = Field(default_factory=list)
+    role_signal_counts: dict[str, int] = Field(default_factory=dict)
+    role_name_matches: dict[str, bool] = Field(default_factory=dict)
+
+
+class CreatorQualificationDecisionV3(StrictModel):
+    version: Literal[
+        CREATOR_QUALIFICATION_POLICY_VERSION_V3
+    ] = CREATOR_QUALIFICATION_POLICY_VERSION_V3
+    relation: CreatorProductRelation
+    core_eligible: bool
+    checks: dict[str, bool]
+    reasons: list[str] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def validate_core_relation(self) -> "CreatorQualificationDecisionV3":
+        expected = self.relation == CreatorProductRelation.CORE_COMPETITOR
+        if self.core_eligible != expected:
+            raise ValueError("v3 core_eligible must match the core_competitor relation")
+        return self
+
+
+class CreatorTopicAssessmentV3(StrictModel):
+    version: Literal[
+        CREATOR_TOPIC_ASSESSMENT_VERSION_V3
+    ] = CREATOR_TOPIC_ASSESSMENT_VERSION_V3
+    topic_spec_version: Literal[TOPIC_SPEC_VERSION] = TOPIC_SPEC_VERSION
+    qualification_policy_version: Literal[
+        CREATOR_QUALIFICATION_POLICY_VERSION_V3
+    ] = CREATOR_QUALIFICATION_POLICY_VERSION_V3
+    selection_version: Literal[CREATOR_SELECTION_VERSION_V3] = CREATOR_SELECTION_VERSION_V3
+    base_scoring_version: Literal[SCORING_VERSION] = SCORING_VERSION
+    keyword_id: str
+    creator_mid: str
+    creator_name: str
+    prediction: CreatorTopicPredictionV3
+    qualification: CreatorQualificationDecisionV3
+    evidence: CreatorTopicEvidence
+    base_score: float = Field(ge=0, le=100)
+    base_tie_break_values: list[str | int | float] = Field(default_factory=list)
+    selected: bool = False
+    selection_rank: int | None = Field(default=None, ge=1, le=MAX_COMPETITORS)
+    rationale: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_v3_selection(self) -> "CreatorTopicAssessmentV3":
+        if self.selected and not self.qualification.core_eligible:
+            raise ValueError("only v3 core_competitor accounts can be selected")
+        if self.selected != (self.selection_rank is not None):
+            raise ValueError("v3 selected and selection_rank must be set together")
         return self
 
 

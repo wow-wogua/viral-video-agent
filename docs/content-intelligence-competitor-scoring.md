@@ -1,6 +1,6 @@
 # P0-C Creator Provider、竞品相关性与 Top 5
 
-当前版本：`content-intelligence.p0.1` / `creator-qualification.p0.1` / `competitor-score.p0.1`；Creator Provider：`bilibili-public-creator.p0-c.2` / `uapi-creator.p0-c.1` / `import-creator.p0-c.2`
+冻结 v1 版本：`content-intelligence.p0.1` / `creator-qualification.p0.1` / `competitor-score.p0.1`；v3 候选新增：`creator-topic-assessment.p0.2` / `creator-qualification.p0.2` / `competitor-selection.p0.3`；Creator Provider：`bilibili-public-creator.p0-c.2` / `uapi-creator.p0-c.1` / `import-creator.p0-c.2`
 
 ## 范围和输入边界
 
@@ -114,3 +114,9 @@ docker compose config --quiet
 v2 产品关系为 `core_competitor`、`adjacent_benchmark`、`occasional_hit`、`excluded`、`insufficient_evidence`。v2 Top 5 只在 `core_competitor` 内按 v1 基础分、系统置信度和稳定 tie-break 选择；相邻标杆单独展示，合格不足 5 个时不补位。P0-C v2 不包含代表视频、ASR、确定性商业指标或正常报告，详见 [P0-C v2 方案C](content-intelligence-p0c-scheme-c.md)。
 
 质量 Gate 与 HITL 产品辅助输出必须分离：无偏 Gate 的资格、排序和 Top 5 不接受 `qualified_reference`、`excluded` 或新人工审核标签，冻结标签只在结果固定后用于计算评测指标；HITL 辅助输出可以应用人工 relevance / specialization / role overlay，并可复用冻结状态，但必须使用 `hitl-assisted-*` 命名并声明不具备无偏 Gate 资格。当前真实人工审核人数为 `reviewer_count=1`，53/53 已完成；HITL 辅助诊断为 selected precision 50.00%、strict Precision@5 100.00%、不相关误判率 0.00%，这些数值因人工标签参与资格和排序而不能作为质量通过证据。P0-D 继续阻塞。
+
+## P0-C v3 候选兼容层
+
+v3 不覆盖 v1 评分或 v2 关系文件。`creator-topic-assessment.p0.2` 把 System Prediction 和 Qualification Policy 结构化分开；`creator-qualification.p0.2` 要求 model confidence ≥0.85、至少 10 个已决投稿、5 个相关投稿、相关比例 ≥60%、90 天至少 3 个且 30 天至少 1 个相关投稿，并保留影响力、Evidence 和聚合/服务/generalist 边界。`competitor-selection.p0.3` 仍只在 core 内使用稳定旧排序，不接受人工 preference。
+
+53 项开发集上只允许一次校准：已审选中 precision 63.64%→85.71%，strict reviewed-core-slot precision 为 80.00%，输出 29→21。正确 core 保留 12/14、已知 non-core 从 8 降到 2；仍有 7 个全量池选中位置未被开发集覆盖，因此这些值不是最终 Gate。新盲评从排除 53 项关系后的 unseen pool 生成，并使用独立 `competitor-evaluation.p0.2` truth mapping。详见 [P0-C v3 协议](content-intelligence-p0c-v3.md)。

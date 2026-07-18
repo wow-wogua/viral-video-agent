@@ -6,11 +6,27 @@ from collections import defaultdict
 from dataclasses import asdict, dataclass
 from typing import Iterable, Sequence
 
-from src.intelligence.contracts import CreatorQualificationStatus
+from src.intelligence.contracts import (
+    AccountTopicRelevance,
+    CreatorProductRelation,
+    CreatorQualificationStatus,
+    CreatorTopicEvidence,
+    CreatorTopicRole,
+    HumanCreatorTopicReview,
+    SpecializationLevel,
+)
 from src.intelligence.evaluation import CreatorReviewDecision, EvaluationKeyword
 
 
 EVALUATION_FORMULA_VERSION = "competitor-evaluation.p0.1"
+EVALUATION_FORMULA_VERSION_V3 = "competitor-evaluation.p0.2"
+EVALUATION_TRUTH_MIN_DECIDED_UPLOADS = 10
+EVALUATION_TRUTH_MIN_RELEVANT_UPLOADS = 5
+EVALUATION_TRUTH_MIN_RELEVANT_RATIO = 0.50
+EVALUATION_TRUTH_MIN_RELEVANT_30D_UPLOADS = 1
+EVALUATION_TRUTH_MIN_RELEVANT_90D_UPLOADS = 3
+EVALUATION_TRUTH_MIN_FOLLOWER_COUNT = 10_000
+EVALUATION_TRUTH_MIN_RELEVANT_VIEW_MEDIAN = 5_000
 
 
 @dataclass(slots=True)
@@ -128,3 +144,130 @@ def aggregate_evaluation(metrics: Sequence[KeywordCompetitorMetrics]) -> dict:
         "by_category": {category: _aggregate(items) for category, items in sorted(by_category.items())},
         "keywords": [asdict(item) for item in metrics],
     }
+
+
+@dataclass(slots=True)
+class CreatorEvaluationTruthV3:
+    formula_version: str
+    keyword_id: str
+    creator_mid: str
+    relation: CreatorProductRelation
+    human_relevance: AccountTopicRelevance
+    human_specialization: SpecializationLevel
+    human_role: CreatorTopicRole
+    objective_checks: dict[str, bool]
+    reasons: list[str]
+
+
+def _truth_influence_passes(evidence: CreatorTopicEvidence) -> bool:
+    return (
+        evidence.follower_count is not None
+        and evidence.follower_count >= EVALUATION_TRUTH_MIN_FOLLOWER_COUNT
+    ) or (
+        evidence.relevant_view_median is not None
+        and evidence.relevant_view_median >= EVALUATION_TRUTH_MIN_RELEVANT_VIEW_MEDIAN
+    )
+
+
+def map_review_to_evaluation_truth_v3(
+    review: HumanCreatorTopicReview,
+    evidence: CreatorTopicEvidence,
+    *,
+    category: str,
+) -> CreatorEvaluationTruthV3:
+    """Map human dimensions and independent evidence to truth without system outputs."""
+    if not review.review_complete:
+        raise ValueError("v3 evaluation truth requires a complete human review")
+    if (
+        review.human_relevance is None
+        or review.human_specialization is None
+        or review.human_role is None
+    ):
+        raise ValueError("v3 evaluation truth requires all human dimensions")
+    checks = {
+        "decided_sample": (
+            evidence.decided_upload_count >= EVALUATION_TRUTH_MIN_DECIDED_UPLOADS
+        ),
+        "relevant_uploads": (
+            evidence.relevant_upload_count >= EVALUATION_TRUTH_MIN_RELEVANT_UPLOADS
+        ),
+        "relevant_ratio": (
+            evidence.relevant_ratio is not None
+            and evidence.relevant_ratio >= EVALUATION_TRUTH_MIN_RELEVANT_RATIO
+        ),
+        "continuity_30d": (
+            evidence.relevant_30d_upload_count
+            >= EVALUATION_TRUTH_MIN_RELEVANT_30D_UPLOADS
+        ),
+        "continuity_90d": (
+            evidence.relevant_90d_upload_count
+            >= EVALUATION_TRUTH_MIN_RELEVANT_90D_UPLOADS
+        ),
+        "influence": _truth_influence_passes(evidence),
+        "not_low_result": category != "low_result",
+    }
+    excluded_roles = {CreatorTopicRole.AGGREGATOR, CreatorTopicRole.UNRELATED}
+    adjacent_roles = {CreatorTopicRole.GENERALIST, CreatorTopicRole.SERVICE}
+    core_roles = {
+        CreatorTopicRole.SPECIALIST,
+        CreatorTopicRole.EDUCATOR,
+        CreatorTopicRole.REVIEWER,
+        CreatorTopicRole.OFFICIAL,
+        CreatorTopicRole.MEDIA,
+    }
+    if (
+        review.human_relevance == AccountTopicRelevance.IRRELEVANT
+        or review.human_role in excluded_roles
+    ):
+        relation = CreatorProductRelation.EXCLUDED
+        reasons = ["human_irrelevant_or_excluded_role"]
+    elif (
+        review.human_relevance == AccountTopicRelevance.UNCERTAIN
+        or review.human_specialization == SpecializationLevel.UNKNOWN
+    ):
+        relation = CreatorProductRelation.INSUFFICIENT_EVIDENCE
+        reasons = ["human_relation_uncertain"]
+    elif review.human_relevance != AccountTopicRelevance.RELEVANT:
+        relation = CreatorProductRelation.INSUFFICIENT_EVIDENCE
+        reasons = ["human_relevance_not_relevant"]
+    elif (
+        review.human_role in adjacent_roles
+        or review.human_specialization in {
+            SpecializationLevel.LOW,
+            SpecializationLevel.MEDIUM,
+        }
+    ):
+        relation = CreatorProductRelation.ADJACENT_BENCHMARK
+        reasons = ["human_role_or_specialization_is_adjacent"]
+    elif review.human_role not in core_roles:
+        relation = CreatorProductRelation.INSUFFICIENT_EVIDENCE
+        reasons = ["human_role_not_core_eligible"]
+    elif not checks["decided_sample"] or not checks["influence"]:
+        relation = CreatorProductRelation.INSUFFICIENT_EVIDENCE
+        reasons = ["independent_sample_or_influence_evidence_insufficient"]
+    elif not all(
+        checks[key]
+        for key in [
+            "relevant_uploads",
+            "relevant_ratio",
+            "continuity_30d",
+            "continuity_90d",
+            "not_low_result",
+        ]
+    ):
+        relation = CreatorProductRelation.OCCASIONAL_HIT
+        reasons = ["independent_continuity_or_focus_policy_not_met"]
+    else:
+        relation = CreatorProductRelation.CORE_COMPETITOR
+        reasons = ["human_dimensions_and_independent_evidence_support_core"]
+    return CreatorEvaluationTruthV3(
+        formula_version=EVALUATION_FORMULA_VERSION_V3,
+        keyword_id=review.keyword_id,
+        creator_mid=review.creator_mid,
+        relation=relation,
+        human_relevance=review.human_relevance,
+        human_specialization=review.human_specialization,
+        human_role=review.human_role,
+        objective_checks=checks,
+        reasons=reasons,
+    )
