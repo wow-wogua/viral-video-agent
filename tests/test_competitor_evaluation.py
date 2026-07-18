@@ -1,3 +1,4 @@
+from scripts.run_p0c_scheme_c_gate import quality_gate_checks
 from src.intelligence.competitor_evaluation import aggregate_evaluation, evaluate_keyword
 from src.intelligence.evaluation import EvaluationKeyword
 
@@ -75,6 +76,24 @@ def test_unknown_and_known_irrelevant_selections_are_not_hidden():
     assert metrics.selected_precision == 1 / 3
     assert metrics.irrelevant_false_positive_rate == 1 / 3
     assert metrics.unresolved_selection_rate == 1 / 3
+
+    full_strict_but_low_selected_precision = evaluate_keyword(
+        keyword_fixture(),
+        selected_mids=["90001", "99999"],
+        retrieved_mids=["90001", "90003", "99999"],
+    )
+    overall = aggregate_evaluation([full_strict_but_low_selected_precision])["overall"]
+    checks = quality_gate_checks(
+        overall,
+        traceability_passed=True,
+        explainability_passed=True,
+    )
+    assert overall["selected_precision"] == 0.5
+    assert overall["strict_precision_at_5"] == 1.0
+    assert not checks["selected_precision_passed"]
+    assert checks["strict_precision_at_5_passed"]
+    assert not checks["precision_passed"]
+    assert not checks["technical_passed"]
 
 
 def test_retrieval_recall_and_category_aggregation_remain_separate():

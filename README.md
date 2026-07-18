@@ -250,9 +250,9 @@ cd ..
 docker compose config --quiet
 ```
 
-当前完整 Python 回归为 182 条测试。P0-C 的工程链路、Creator Provider Recovery 与 UAPI development-only 接入已实现。UAPI 完整采集取得 387/394 可评分 Creator 样本和 98.22% 可用覆盖，解决了原数据源阻塞；但原冻结 Gate 仍因 selected precision 18.42%、strict Precision@5 33.33% 和 unresolved selection rate 76.32% 未通过。不相关误判率为 5.26%，来源追溯和分数拆解通过。
+当前完整 Python 回归为 185 条测试。P0-C 的工程链路、Creator Provider Recovery 与 UAPI development-only 接入已实现。UAPI 完整采集取得 387/394 可评分 Creator 样本和 98.22% 可用覆盖，解决了原数据源阻塞；但原冻结 v1 Gate 仍因 selected precision 18.42%、strict Precision@5 33.33% 和 unresolved selection rate 76.32% 未通过。不相关误判率为 5.26%，来源追溯和分数拆解通过。
 
-P0-C v2 方案C已增加版本化 TopicSpec、账号—主题 relevance/specialization/role、产品关系、确定性 Boundary Guard、system confidence 和 Review Router，并在不调用 UAPI、不新增 LLM 调用的条件下精确复现 v1 正式指标。当前已生成 53 个关键词—账号盲审单元，等待 1 名真实人工审核者完成；审核前的 v2 暂定选择不是正式 Gate 结果。P0-D 继续被阻塞。详细结果见 [验证记录](docs/content-intelligence-p0c-validation-20260716.md)、[Recovery 记录](docs/content-intelligence-p0c-recovery-20260716.md)、[Creator 数据源收口](docs/content-intelligence-p0c-source-recovery-20260716.md)、[UAPI正式 Gate](docs/content-intelligence-p0c-uapi-gate-20260718.md)和 [方案C说明](docs/content-intelligence-p0c-scheme-c.md)。
+P0-C v2 方案C已增加版本化 TopicSpec、账号—主题 relevance/specialization/role、产品关系、确定性 Boundary Guard、system confidence 和 Review Router。53 个关键词—账号审核单元已经完成 53/53，HITL 审核、严格导入和产品辅助选择工作流验证完成，实际 `reviewer_count=1`。完整性复核纠正了原 `with_reservation`：冻结真值曾通过关系 overlay 与 `preferred_mids` 影响 Top 5，且 Gate 漏检 selected precision。纠正后的无偏质量 Gate 完全使用 pre-HITL 系统排序，selected precision 20.69%、strict Precision@5 28.57%、不相关误判率 3.45%，状态为 `failed`；单独的 HITL 辅助输出诊断值为 50.00% / 100.00% / 0.00%，但不具备无偏 Gate 资格。P0-D 继续被阻塞。详细结果见 [验证记录](docs/content-intelligence-p0c-validation-20260716.md)、[Recovery 记录](docs/content-intelligence-p0c-recovery-20260716.md)、[Creator 数据源收口](docs/content-intelligence-p0c-source-recovery-20260716.md)、[UAPI正式 Gate](docs/content-intelligence-p0c-uapi-gate-20260718.md)和 [方案C说明](docs/content-intelligence-p0c-scheme-c.md)。
 
 ### 真实 API 冒烟（2026-07-13）
 

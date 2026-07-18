@@ -5,6 +5,10 @@ from datetime import datetime, timedelta, timezone
 import pytest
 from pydantic import ValidationError
 
+from scripts.run_p0c_scheme_c_gate import (
+    apply_hitl_frozen_status,
+    select_unbiased_gate_competitors,
+)
 from src.intelligence.contracts import (
     AccountTopicRelevance,
     BoundaryRisk,
@@ -20,6 +24,7 @@ from src.intelligence.creator_topic import (
     apply_human_review,
     assess_creator_topic,
     route_keyword_reviews,
+    select_hitl_assisted_top_competitors,
     select_v2_top_competitors,
     validate_human_review_rows,
 )
@@ -287,7 +292,7 @@ def test_v2_top5_only_uses_core_is_unpadded_and_input_order_stable():
     assert sum(item.selected for item in forward) == 2
 
 
-def test_v2_selection_prioritizes_frozen_qualified_references_without_hardcoding_accounts():
+def test_unbiased_gate_selection_rejects_all_human_label_paths():
     payloads = [candidate(str(90_001 + index), score=90 - index) for index in range(6)]
     assessments = [
         assess_creator_topic(TOPIC, payload, evidence)
@@ -295,10 +300,32 @@ def test_v2_selection_prioritizes_frozen_qualified_references_without_hardcoding
     ]
     preferred_mid = assessments[-1].creator_mid
 
-    selected = select_v2_top_competitors(assessments, preferred_mids={preferred_mid})
+    unbiased = select_unbiased_gate_competitors(assessments)
+    unbiased_selected = {item.creator_mid for item in unbiased if item.selected}
+    assert preferred_mid not in unbiased_selected
+    assert sum(item.selected for item in unbiased) == 5
 
-    assert preferred_mid in {item.creator_mid for item in selected if item.selected}
-    assert sum(item.selected for item in selected) == 5
+    with pytest.raises(TypeError):
+        select_v2_top_competitors(assessments, preferred_mids={preferred_mid})  # type: ignore[call-arg]
+
+    hitl_overlaid = [
+        apply_hitl_frozen_status(
+            assessment,
+            "qualified_reference" if assessment.creator_mid == preferred_mid else None,
+        )
+        for assessment in assessments
+    ]
+    hitl_assisted = select_hitl_assisted_top_competitors(
+        hitl_overlaid,
+        preferred_mids={preferred_mid},
+    )
+
+    assert preferred_mid in {item.creator_mid for item in hitl_assisted if item.selected}
+    with pytest.raises(ValueError, match="cannot consume human-label overlays"):
+        select_unbiased_gate_competitors(hitl_overlaid)
+    assert {
+        item.creator_mid for item in select_unbiased_gate_competitors(assessments) if item.selected
+    } == unbiased_selected
 
 
 def test_review_router_prioritizes_unlabelled_selected_and_reuses_frozen_labels():

@@ -25,7 +25,7 @@ UAPI 在 2026-07-16 的官方公开页面中仍列出上述两个接口，二者
 
 私有 canary 与完整采集使用 `sha256(mid)` 升序的确定性选择规则，规则和目标集合哈希在请求前写入新 round。5 MID 或 20 MID canary 失败后不得换样本；同 round 按账号原子 checkpoint 并幂等恢复，新 round 必须使用新目录。20 MID 至少 18 个可用、BVID/标题/发布时间完整率至少 95% 后，才允许考虑 394 MID 完整采集。
 
-2026-07-18 真实验证结果：20 MID 为 18/20 可评分，关键字段完整率 100%；完整 394 MID 为 387/394 可评分、exact coverage 100%、关键字段完整率 100%。数据覆盖通过后，原冻结 Gate 仍因 selected precision 18.42% 和 strict Precision@5 33.33% 失败；不相关误判率为 5.26%，但 unresolved selection rate 达 76.32%。因此下一阻塞是账号级人工标签覆盖与资格/评分校准，不能继续用数据源扩张或调权重包装为通过。详见 [P0-C UAPI Creator 数据源与正式 Gate](content-intelligence-p0c-uapi-gate-20260718.md)。
+2026-07-18 真实验证结果：20 MID 为 18/20 可评分，关键字段完整率 100%；完整 394 MID 为 387/394 可评分、exact coverage 100%、关键字段完整率 100%。数据覆盖通过后，原冻结 v1 Gate 仍因 selected precision 18.42% 和 strict Precision@5 33.33% 失败；不相关误判率为 5.26%，但 unresolved selection rate 达 76.32%。随后完成的 53 项方案C人工审核验证了 HITL 产品辅助流程，但不能反向证明系统质量：纠正后的无偏 v2 Gate 只读取 pre-HITL 系统排序，selected precision 20.69%、strict Precision@5 28.57%、不相关误判率 3.45%，仍为 `failed`。因此不能继续用数据源扩张、人工真值重排或调权重包装为通过。详见 [P0-C UAPI Creator 数据源与正式 Gate](content-intelligence-p0c-uapi-gate-20260718.md)和 [P0-C v2 方案C](content-intelligence-p0c-scheme-c.md)。
 
 私有批量采集每个账号后原子保存；同 round 恢复校验 Provider 版本和目标集合并跳过已有观测，断路 round 不会重新发请求。新 round 必须使用新的输出目录和 `capture_round_id`。完整 Recovery 记录见 [P0-C Creator Provider Recovery](content-intelligence-p0c-recovery-20260716.md)。
 
@@ -112,3 +112,5 @@ docker compose config --quiet
 - `model_confidence` 与确定性 `system_confidence` 分开保存；后者由样本状态、标签覆盖、投稿覆盖、时间完整度、阈值 margin、连续性、冲突和 Evidence 完整度按固定权重计算。
 
 v2 产品关系为 `core_competitor`、`adjacent_benchmark`、`occasional_hit`、`excluded`、`insufficient_evidence`。v2 Top 5 只在 `core_competitor` 内按 v1 基础分、系统置信度和稳定 tie-break 选择；相邻标杆单独展示，合格不足 5 个时不补位。P0-C v2 不包含代表视频、ASR、确定性商业指标或正常报告，详见 [P0-C v2 方案C](content-intelligence-p0c-scheme-c.md)。
+
+质量 Gate 与 HITL 产品辅助输出必须分离：无偏 Gate 的资格、排序和 Top 5 不接受 `qualified_reference`、`excluded` 或新人工审核标签，冻结标签只在结果固定后用于计算评测指标；HITL 辅助输出可以应用人工 relevance / specialization / role overlay，并可复用冻结状态，但必须使用 `hitl-assisted-*` 命名并声明不具备无偏 Gate 资格。当前真实人工审核人数为 `reviewer_count=1`，53/53 已完成；HITL 辅助诊断为 selected precision 50.00%、strict Precision@5 100.00%、不相关误判率 0.00%，这些数值因人工标签参与资格和排序而不能作为质量通过证据。P0-D 继续阻塞。

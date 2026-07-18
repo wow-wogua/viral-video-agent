@@ -575,15 +575,17 @@ def _selection_key(assessment: CreatorTopicAssessment) -> tuple[Any, ...]:
     )
 
 
-def select_v2_top_competitors(
+def _select_top_competitors(
     assessments: Sequence[CreatorTopicAssessment],
     *,
-    preferred_mids: set[str] | None = None,
+    preferred_mids: set[str],
 ) -> list[CreatorTopicAssessment]:
-    preferred = preferred_mids or set()
     ordered = sorted(
         assessments,
-        key=lambda item: (0 if item.creator_mid in preferred else 1, *_selection_key(item)),
+        key=lambda item: (
+            0 if item.creator_mid in preferred_mids else 1,
+            *_selection_key(item),
+        ),
     )
     selected_mids = {
         item.creator_mid: rank
@@ -600,6 +602,22 @@ def select_v2_top_competitors(
         })
         for item in ordered
     ]
+
+
+def select_v2_top_competitors(
+    assessments: Sequence[CreatorTopicAssessment],
+) -> list[CreatorTopicAssessment]:
+    """Select the unbiased system Top 5 without human-label preferences."""
+    return _select_top_competitors(assessments, preferred_mids=set())
+
+
+def select_hitl_assisted_top_competitors(
+    assessments: Sequence[CreatorTopicAssessment],
+    *,
+    preferred_mids: set[str],
+) -> list[CreatorTopicAssessment]:
+    """Select a product-assistance Top 5 that may use explicit human preferences."""
+    return _select_top_competitors(assessments, preferred_mids=preferred_mids)
 
 
 def review_id(keyword_id: str, creator_mid: str) -> str:
