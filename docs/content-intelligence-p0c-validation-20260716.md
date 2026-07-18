@@ -90,3 +90,27 @@ Recovery 自动化为 P0-C 定向 41 passed、P0-B 42 passed、P0-A 36 passed、
 - 样本份额不是市场份额；第一次运行不能证明增长趋势。
 - Development Search/Creator Provider 不代表生产商业授权或稳定 SLA。
 - 没有真实用户效果、代表视频、ASR、确定性商业指标完整实现、`IntelligenceReport`、完整前端报告、部署或周期监控。
+
+## Creator 数据源收口补充（2026-07-16）
+
+在不改变评分、资格、评测公式、冻结关键词、人工标签或候选范围的前提下，新增第三方 `uapi-creator.p0-c.1` development-only Provider，并把私有 capture 流程扩展为可选择 UAPI、按 `sha256(mid)` 升序固定 canary、请求前保存选择规则和目标集合哈希、逐账号原子 checkpoint、同 round 幂等、新 round 隔离和字段完整率汇总。
+
+UAPI 当前公开文档列出 B 站投稿与用户信息接口，均为 4 积分/次，使用 Bearer API Key；官方建议平均不超过 40 次/分钟并在 429 后退避。实现固定单并发、默认 1.5 秒间隔、429 遵循 `Retry-After`，timeout、connection 和 5xx 最多重试 2 次，认证错误与普通 4xx 不密集重试。Key 只能通过 `UAPI_API_KEY` 或仓库外秘密配置注入，不进入任务请求、日志、异常、fixture 或 Git。
+
+截至 2026-07-16 阶段 A 工程检查点，真实 5 MID 和 20 MID canary 尚未执行；当时本地尚未确认 UAPI Key，因此没有生成新 coverage 或 Gate 指标，也没有重跑 394 MID 与正式 P0-C Gate。原 `20260716-183040` 失败基线和 `20260716-200338-recovery-canary` 负面结果继续保留。详细边界见 [P0-C Creator 数据源收口](content-intelligence-p0c-source-recovery-20260716.md)。
+
+本轮自动化为 P0-C/Provider/API 定向 51 passed、P0-B 43 passed、P0-A 36 passed、完整 Python 168 passed；Compose、diff 和语法检查通过。以上只证明工程接入，不替代真实 canary 或正式 Gate。
+
+## UAPI完整覆盖与正式 Gate 补充（2026-07-18）
+
+用户仅在本地配置 UAPI Key，Key 未进入 Git 或证据文件。新建三个仓库外 round，选择规则均为请求前保存的 `sha256(mid)` 升序，失败后没有换样本：
+
+- 5 MID connectivity canary：5/5 Provider 正常响应，3/5 有投稿，2/5 无公开投稿；10 attempts、0 retry。
+- 20 MID正式 canary：18/20 有可评分投稿，334 条投稿的 BVID、标题、发布时间、播放量和粉丝数完整率均为 100%；40 attempts、0 retry。
+- 394 MID完整采集：expected/imported/covered=394/394/394，missing/unexpected=0/0，387/394 可评分，覆盖 98.22%；6913 条投稿关键字段完整率 100%；790 attempts、2 retry。
+
+覆盖通过后才重跑原冻结 Gate。最终输出 38 个位置，其中 frozen qualified 命中 7、明确 excluded 误选 2、unresolved 29；selected precision 18.42%、strict Precision@5 33.33%、不相关误判率 5.26%、unresolved selection rate 76.32%、eligible 输出覆盖 80.95%、Retrieval Recall 58.33%。来源追溯与分数拆解通过，Precision Gate 未通过。
+
+因此 Creator 数据源不再是主要阻塞；下一阻塞是账号级人工标签覆盖与资格/评分校准。本任务没有调整评分、权重、资格门槛、关键词或人工标签，正式结论仍为 failed，继续阻塞 P0-D。详细结果见 [P0-C UAPI Creator 数据源与正式 Gate](content-intelligence-p0c-uapi-gate-20260718.md)。
+
+最终自动化为 P0-C/Provider/API 定向 52 passed、P0-B 43 passed、P0-A 36 passed、完整 Python 169 passed；Compose、语法和 diff 检查通过。

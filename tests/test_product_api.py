@@ -154,6 +154,29 @@ async def test_p0c_creator_import_is_strictly_validated_before_enqueue(api_clien
 
 
 @pytest.mark.asyncio
+async def test_p0c_uapi_creator_provider_selection_never_accepts_inline_credentials(api_client):
+    client, session_factory = api_client
+    await register(client, "uapi-creator@example.com")
+    response = await client.post("/jobs", json={
+        "query": "使用第三方开发数据源审计账号",
+        "platforms": ["bilibili"],
+        "analysis_mode": "standard",
+        "task_mode": "content_intelligence",
+        "keyword": "脱敏关键词",
+        "max_pages": 1,
+        "include_competitors": True,
+        "creator_provider": "uapi",
+        "uapi_api_key": "must-not-persist",
+        "idempotency_key": "uapi-creator-provider-123",
+    })
+    assert response.status_code == 202, response.text
+    async with session_factory() as db:
+        job = await db.get(AnalysisJob, uuid.UUID(response.json()["id"]))
+        assert job.request_filters["competitors"]["creator_provider"] == {"kind": "uapi"}
+        assert "must-not-persist" not in str(job.request_filters)
+
+
+@pytest.mark.asyncio
 async def test_owned_search_snapshot_is_queryable(api_client):
     client, session_factory = api_client
     await register(client, "snapshot-query@example.com")

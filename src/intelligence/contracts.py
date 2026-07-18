@@ -245,7 +245,7 @@ class CreatorVideo(StrictModel):
 
 
 class CreatorRequestAttempt(StrictModel):
-    operation: Literal["wbi_nav", "uploads", "follower"]
+    operation: Literal["wbi_nav", "uploads", "follower", "uapi_archives", "uapi_userinfo"]
     attempt_number: int = Field(ge=1, le=5)
     started_at: datetime
     completed_at: datetime
@@ -256,6 +256,9 @@ class CreatorRequestAttempt(StrictModel):
         "cancelled",
         "timeout",
         "connection_error",
+        "authentication_missing",
+        "authentication_error",
+        "not_found",
         "http_429",
         "http_5xx",
         "http_error",
@@ -280,6 +283,9 @@ class CreatorRequestAudit(StrictModel):
         "cancelled",
         "timeout",
         "connection_error",
+        "authentication_missing",
+        "authentication_error",
+        "not_found",
         "http_429",
         "http_5xx",
         "http_error",

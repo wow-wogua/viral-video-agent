@@ -35,6 +35,8 @@ ASR_MAX_BASE64_BYTES: int = int(os.getenv("ASR_MAX_BASE64_BYTES", str(10 * 1024 
 ASR_MAX_VIDEO_SECONDS: int = int(os.getenv("ASR_MAX_VIDEO_SECONDS", "600"))
 ASR_MAX_VIDEOS: int = _bounded_int("ASR_MAX_VIDEOS", 5, 1, 5)
 
+UAPI_API_KEY: str = os.getenv("UAPI_API_KEY", "")
+
 ANALYSIS_CONFIDENCE_THRESHOLD: float = float(os.getenv("ANALYSIS_CONFIDENCE_THRESHOLD", "0.8"))
 ANALYST_MAX_ITERATIONS: int = int(os.getenv("ANALYST_MAX_ITERATIONS", "5"))
 WRITER_MAX_REVISIONS: int = int(os.getenv("WRITER_MAX_REVISIONS", "3"))

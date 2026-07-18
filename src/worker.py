@@ -7,7 +7,7 @@ from arq.connections import RedisSettings
 from sqlalchemy import select
 
 from src.api.errors import ERROR_MESSAGES
-from src.config import ASR_MAX_VIDEOS, ASR_MAX_VIDEO_SECONDS, DEFAULT_LLM_MODEL_ID, DEFAULT_LLM_PROVIDER, JOB_MAX_RETRIES, JOB_TIMEOUT_SECONDS, REDIS_URL, WORKER_MAX_JOBS
+from src.config import ASR_MAX_VIDEOS, ASR_MAX_VIDEO_SECONDS, DEFAULT_LLM_MODEL_ID, DEFAULT_LLM_PROVIDER, JOB_MAX_RETRIES, JOB_TIMEOUT_SECONDS, REDIS_URL, UAPI_API_KEY, WORKER_MAX_JOBS
 from src.db.models import CrawlRun as CrawlRunRecord, EvidenceItem, Report, UsageRecord
 from src.db.session import async_session_factory
 from src.gateway.cost_tracker import cost_tracker
@@ -18,7 +18,7 @@ from src.graph.v2 import stable_evidence_id
 from src.intelligence.competitor_service import analyze_competitors
 from src.intelligence.competitor_store import persist_competitor_analysis
 from src.intelligence.contracts import CrawlStatus, SearchRequest
-from src.intelligence.creator_providers import BilibiliDevelopmentCreatorProvider, ImportCreatorProvider
+from src.intelligence.creator_providers import BilibiliDevelopmentCreatorProvider, ImportCreatorProvider, UAPIDevelopmentCreatorProvider
 from src.intelligence.providers import BilibiliDevelopmentSearchProvider, ImportSearchProvider
 from src.intelligence.relevance import LLMRelevanceLabeler, RelevanceContext
 from src.intelligence.search_service import execute_search_snapshot
@@ -97,6 +97,8 @@ def _creator_provider_for_job(job):
     kind = config.get("kind", "development")
     if kind == "development":
         return BilibiliDevelopmentCreatorProvider()
+    if kind == "uapi":
+        return UAPIDevelopmentCreatorProvider(api_key=UAPI_API_KEY)
     if kind == "import":
         if config.get("format") == "json":
             return ImportCreatorProvider.from_json(config.get("data"))

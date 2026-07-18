@@ -100,6 +100,8 @@ Compose 包含 8 个服务：`frontend`、`app`、`worker`、`postgres`、`redis
 - [P0-C Creator Provider、竞品相关性与 Top 5](docs/content-intelligence-competitor-scoring.md)
 - [2026-07-16 P0-C 验证记录](docs/content-intelligence-p0c-validation-20260716.md)
 - [2026-07-16 P0-C Creator Provider Recovery](docs/content-intelligence-p0c-recovery-20260716.md)
+- [2026-07-16 P0-C Creator 数据源收口](docs/content-intelligence-p0c-source-recovery-20260716.md)
+- [2026-07-18 P0-C UAPI Creator 数据源与正式 Gate](docs/content-intelligence-p0c-uapi-gate-20260718.md)
 - [权限、数据与 Evidence 边界](docs/security-and-data.md)
 - [2026-07-13 验收记录](docs/validation-20260713.md)
 
@@ -171,6 +173,14 @@ ASR_MAX_VIDEOS=5
 
 同一把余额扣费 Key 可以同时用于 MiMo Agent LLM 和 ASR，但 LLM 路由与转写仍使用独立客户端。MiMo Token Plan 另有 `https://token-plan-cn.xiaomimimo.com/v1` OpenAI 兼容地址并包含 ASR 模型，但其页面明确限制为兼容 AI 编程/智能体工具中的交互式使用，不可用于自动化脚本或应用后端，因此本项目 Worker 不使用 Token Plan Key。`ASR_MAX_VIDEOS` 只允许 1～5，默认 5；内容深度分析从本次返回样本中选择最多 N 个唯一的公开 B 站视频，不是全站质量 Top N。没有配置可用于应用后端的 ASR Key 时，前端禁用内容深度分析；转写失败时 Worker 降级为元数据分析，不编造视频内容。用户不需要上传音频，Worker 会自动提取公开视频音频。
 
+P0-C 可显式选择第三方 UAPI Creator Provider。它只用于 development-only 评测，不代表生产授权、商业授权或稳定 SLA；Key 只能放在本地 `.env`、进程环境变量或仓库外秘密配置中，不要放进任务 JSON、日志或 Git：
+
+```dotenv
+UAPI_API_KEY=
+```
+
+UAPI 路径只调用投稿和用户信息接口，单并发、默认最小间隔 1.5 秒。投稿接口拿不到的简介、标签、分区和多数互动字段保持 null/missing，不由 LLM 补造。真实 canary 和完整评测结果只写入仓库外私有 round。
+
 ## 后台任务 API
 
 ```text
@@ -191,7 +201,7 @@ POST   /reports/{report_id}/feedback
 
 Redis 只保存队列、临时状态、事件和缓存；长期业务事实全部进入 PostgreSQL。
 
-`task_mode=content_intelligence` 默认保持 P0-B 搜索快照入口：支持最多 5 页 Development/Import Provider、逐页状态、BVID/MID 去重和按 crawl run 冻结的视频/创作者观测；历史快照不从全局最新实体回读。显式传 `include_competitors=true` 时才继续执行 P0-C Creator Provider、结构化相关性、确定性评分和最多5个 qualified Top 5，并通过独立接口查询；它仍不生成代表视频、ASR、完整情报报告或正常 `reports` 行。未传 `task_mode` 的现有请求继续走旧分析路径。
+`task_mode=content_intelligence` 默认保持 P0-B 搜索快照入口：支持最多 5 页 Development/Import Provider、逐页状态、BVID/MID 去重和按 crawl run 冻结的视频/创作者观测；历史快照不从全局最新实体回读。显式传 `include_competitors=true` 时才继续执行 P0-C Creator Provider、结构化相关性、确定性评分和最多5个 qualified Top 5。Creator Provider 可选原公开 development、第三方 UAPI development-only 或严格 Import；UAPI Key 不进入任务请求。结果通过独立接口查询，仍不生成代表视频、ASR、完整情报报告或正常 `reports` 行。未传 `task_mode` 的现有请求继续走旧分析路径。
 
 ## Evidence 引用
 
@@ -239,7 +249,7 @@ cd ..
 docker compose config --quiet
 ```
 
-当前完整 Python 回归为 158 条测试。P0-C 的工程链路和 Creator Provider Recovery 可靠性已实现，但 Recovery 低频 canary 仍出现 HTTP 412 与 Provider `-352`，没有重跑 20 关键词质量 Gate；原 Gate 仍未通过，不能进入 P0-D。详细结果见 [验证记录](docs/content-intelligence-p0c-validation-20260716.md)和 [Recovery 记录](docs/content-intelligence-p0c-recovery-20260716.md)。
+当前完整 Python 回归为 169 条测试。P0-C 的工程链路、Creator Provider Recovery 与 UAPI development-only 接入已实现。UAPI 完整采集取得 387/394 可评分 Creator 样本和 98.22% 可用覆盖，解决了原数据源阻塞；但原冻结 Gate 仍因 selected precision 18.42%、strict Precision@5 33.33% 和 unresolved selection rate 76.32% 未通过。不相关误判率为 5.26%，来源追溯和分数拆解通过。下一阻塞是账号级人工标签覆盖与资格/评分校准，不能进入 P0-D。详细结果见 [验证记录](docs/content-intelligence-p0c-validation-20260716.md)、[Recovery 记录](docs/content-intelligence-p0c-recovery-20260716.md)、[Creator 数据源收口](docs/content-intelligence-p0c-source-recovery-20260716.md)和 [UAPI正式 Gate](docs/content-intelligence-p0c-uapi-gate-20260718.md)。
 
 ### 真实 API 冒烟（2026-07-13）
 

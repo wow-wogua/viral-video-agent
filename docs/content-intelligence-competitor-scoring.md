@@ -1,6 +1,6 @@
 # P0-C Creator Provider、竞品相关性与 Top 5
 
-当前版本：`content-intelligence.p0.1` / `creator-qualification.p0.1` / `competitor-score.p0.1`；Recovery Provider：`bilibili-public-creator.p0-c.2` / `import-creator.p0-c.2`
+当前版本：`content-intelligence.p0.1` / `creator-qualification.p0.1` / `competitor-score.p0.1`；Creator Provider：`bilibili-public-creator.p0-c.2` / `uapi-creator.p0-c.1` / `import-creator.p0-c.2`
 
 ## 范围和输入边界
 
@@ -13,12 +13,19 @@ P0-C 只消费带 `snapshot_revision=20260716_0003` 的新 crawl run。迁移前
 ## Creator Provider
 
 - Development：`bilibili-public-creator.p0-c.2`。只访问公开账号页相关接口，不读取个人 Cookie，不读取环境代理，不绕过登录、验证码、访问控制或风控；固定最新最多 20 条，记录观测时间、主页 URL、Provider 版本、30/90 天窗口和缺失原因。
+- UAPI Development：`uapi-creator.p0-c.1`。第三方 development-only 数据源，只调用 `GET /api/v1/social/bilibili/archives` 和 `GET /api/v1/social/bilibili/userinfo`。API Key 只能通过 `UAPI_API_KEY` 或仓库外秘密配置注入，不能放进任务请求、日志、异常、fixture 或 Git。单并发，默认请求间隔 1.5 秒；429 遵循 `Retry-After`，timeout、connection 和 5xx 最多重试 2 次，认证错误与普通 4xx 不密集重试。
 - Import：`creator-import.p0.1` / `import-creator.p0-c.2`。严格 JSON/CSV，未知字段、重复 MID、超过 20 条、状态与投稿不一致均拒绝；同时保存 import 身份和原始来源 Provider。可声明来源类型、授权状态、capture round、目标数量和目标集合哈希，并对当前候选集合执行 exact coverage 校验；声明不等于已经取得合同授权。
 - Fixture：仅脱敏固定样例，自动化测试使用，不含真实私有关键词、MID 或账号名。
 
 状态为 `success/partial/missing/failed/timeout/cancelled`。Provider 拿不到投稿时保留 missing 或失败状态；系统可以保存候选账号，但不得凭单条搜索视频升级为高置信度 Top 5。
 
 Recovery 可靠性规则：HTTP 412 和 Provider `-352/-412/-401/-403` 不重试，并按账号最终结果计算连续风控；连续 3 次后打开断路，记录 15 分钟 cooldown 但不长等待或自动恢复。后续账号不发请求，保存 `missing + not_attempted_due_to_risk_control`。超时、连接错误、429、5xx 最多重试 2 次并记录 0.5/1 秒退避。每次 attempt 的分类、限频等待、退避、最终 circuit 状态进入私有 capture/import 审计，不保存响应正文或完整查询参数。
+
+UAPI 在 2026-07-16 的官方公开页面中仍列出上述两个接口，二者均为 4 积分/次；一个账号正常采样通常调用投稿和用户信息各一次，即约 8 积分。官方公平使用页面说明限流动态调整，并建议平均不超过 40 次/分钟；状态页显示整体系统正常，但没有单独列出投稿接口监控。因此该 Provider 不能被描述为生产授权、商业授权或稳定 SLA。投稿接口当前可提供 BVID、标题、封面、时长、播放量和发布时间；用户信息接口可提供账号名与粉丝数。简介、标签、分区和多数互动字段拿不到时保持 null/missing，不调用额外接口补齐，也不由 LLM 猜测。
+
+私有 canary 与完整采集使用 `sha256(mid)` 升序的确定性选择规则，规则和目标集合哈希在请求前写入新 round。5 MID 或 20 MID canary 失败后不得换样本；同 round 按账号原子 checkpoint 并幂等恢复，新 round 必须使用新目录。20 MID 至少 18 个可用、BVID/标题/发布时间完整率至少 95% 后，才允许考虑 394 MID 完整采集。
+
+2026-07-18 真实验证结果：20 MID 为 18/20 可评分，关键字段完整率 100%；完整 394 MID 为 387/394 可评分、exact coverage 100%、关键字段完整率 100%。数据覆盖通过后，原冻结 Gate 仍因 selected precision 18.42% 和 strict Precision@5 33.33% 失败；不相关误判率为 5.26%，但 unresolved selection rate 达 76.32%。因此下一阻塞是账号级人工标签覆盖与资格/评分校准，不能继续用数据源扩张或调权重包装为通过。详见 [P0-C UAPI Creator 数据源与正式 Gate](content-intelligence-p0c-uapi-gate-20260718.md)。
 
 私有批量采集每个账号后原子保存；同 round 恢复校验 Provider 版本和目标集合并跳过已有观测，断路 round 不会重新发请求。新 round 必须使用新的输出目录和 `capture_round_id`。完整 Recovery 记录见 [P0-C Creator Provider Recovery](content-intelligence-p0c-recovery-20260716.md)。
 

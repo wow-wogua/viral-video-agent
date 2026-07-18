@@ -6,9 +6,12 @@ import asyncio
 import csv
 import hashlib
 import json
+import os
+import re
 import time
 from collections.abc import Awaitable, Callable
 from datetime import datetime, timedelta, timezone
+from email.utils import parsedate_to_datetime
 from io import StringIO
 from pathlib import PurePosixPath
 from typing import Any, Literal, Protocol
@@ -31,6 +34,7 @@ from src.intelligence.providers import CancelCheck, raw_payload_hash
 CREATOR_IMPORT_SCHEMA_VERSION = "creator-import.p0.1"
 CREATOR_IMPORT_PROVIDER_VERSION = "import-creator.p0-c.2"
 BILIBILI_CREATOR_PROVIDER_VERSION = "bilibili-public-creator.p0-c.2"
+UAPI_CREATOR_PROVIDER_VERSION = "uapi-creator.p0-c.1"
 BILIBILI_NAV_ENDPOINT = "https://api.bilibili.com/x/web-interface/nav"
 BILIBILI_UPLOAD_ENDPOINT = "https://api.bilibili.com/x/space/wbi/arc/search"
 BILIBILI_FOLLOWER_ENDPOINT = "https://api.bilibili.com/x/relation/stat"
@@ -42,6 +46,10 @@ CREATOR_RISK_CONTROL_COOLDOWN_SECONDS = 15 * 60
 CREATOR_RISK_CONTROL_HTTP_STATUSES = frozenset({412})
 CREATOR_RISK_CONTROL_PROVIDER_CODES = frozenset({-412, -352, -401, -403})
 CREATOR_RETRYABLE_HTTP_STATUSES = frozenset({429, 500, 502, 503, 504})
+UAPI_BASE_URL = "https://uapis.cn/api/v1"
+UAPI_ARCHIVES_PATH = "/social/bilibili/archives"
+UAPI_USERINFO_PATH = "/social/bilibili/userinfo"
+UAPI_DEFAULT_MIN_INTERVAL_SECONDS = 1.5
 
 _MIXIN_KEY_ENC_TAB = (
     46, 47, 18, 2, 53, 8, 23, 32, 15, 50, 10, 31, 58, 3, 45, 35,
@@ -97,12 +105,29 @@ def _duration_seconds(value: Any) -> int | None:
     return None
 
 
+def _retry_after_seconds(value: str | None, now: datetime) -> float | None:
+    text = (value or "").strip()
+    if not text:
+        return None
+    try:
+        return max(0.0, float(text))
+    except ValueError:
+        try:
+            retry_at = parsedate_to_datetime(text)
+        except (TypeError, ValueError, OverflowError):
+            return None
+        if retry_at.tzinfo is None:
+            retry_at = retry_at.replace(tzinfo=timezone.utc)
+        return max(0.0, (retry_at.astimezone(timezone.utc) - now).total_seconds())
+
+
 class CreatorProviderCapabilities(StrictModel):
     provider_name: str
     provider_version: str
     provider_kind: Literal["development", "import", "fixture", "production"]
     latest_upload_limit: Literal[LATEST_UPLOAD_LIMIT] = LATEST_UPLOAD_LIMIT
     requires_login: bool = False
+    requires_api_key: bool = False
     uses_personal_cookie: bool = False
     commercial_authorization: Literal["unknown", "development_only", "authorized"] = "unknown"
 
@@ -884,6 +909,615 @@ class BilibiliDevelopmentCreatorProvider:
         )
 
 
+class UAPIDevelopmentCreatorProvider:
+    """API-key authenticated third-party Creator Provider for development evaluation."""
+
+    def __init__(
+        self,
+        *,
+        api_key: str | None = None,
+        client: httpx.AsyncClient | None = None,
+        base_url: str = UAPI_BASE_URL,
+        timeout_seconds: float = 10.0,
+        max_retries: int = CREATOR_MAX_RETRIES,
+        backoff_base_seconds: float = CREATOR_BACKOFF_BASE_SECONDS,
+        min_interval_seconds: float = UAPI_DEFAULT_MIN_INTERVAL_SECONDS,
+        now: Callable[[], datetime] = utcnow,
+        sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
+    ) -> None:
+        if not 0 <= max_retries <= 2:
+            raise ValueError("UAPI creator provider max_retries must be between 0 and 2")
+        if timeout_seconds <= 0 or backoff_base_seconds < 0:
+            raise ValueError("UAPI creator provider timing settings are invalid")
+        if min_interval_seconds < UAPI_DEFAULT_MIN_INTERVAL_SECONDS:
+            raise ValueError("UAPI creator provider interval must be at least 1.5 seconds")
+        configured_key = os.getenv("UAPI_API_KEY", "") if api_key is None else api_key
+        self._api_key = configured_key.strip()
+        self._base_url = base_url.rstrip("/")
+        self._owns_client = client is None
+        self._client = client or httpx.AsyncClient(
+            timeout=timeout_seconds,
+            follow_redirects=True,
+            trust_env=False,
+            headers={
+                "User-Agent": "ViralVideoAgent-UAPI-Development/0.1",
+                "Accept": "application/json",
+            },
+        )
+        self._max_retries = max_retries
+        self._backoff_base_seconds = backoff_base_seconds
+        self._min_interval_seconds = min_interval_seconds
+        self._now = now
+        self._sleep = sleep
+        self._last_request_started: float | None = None
+        self._request_lock = asyncio.Lock()
+
+    @property
+    def capabilities(self) -> CreatorProviderCapabilities:
+        return CreatorProviderCapabilities(
+            provider_name="uapi-creator",
+            provider_version=UAPI_CREATOR_PROVIDER_VERSION,
+            provider_kind="development",
+            requires_api_key=True,
+            commercial_authorization="development_only",
+        )
+
+    async def close(self) -> None:
+        if self._owns_client:
+            await self._client.aclose()
+
+    @property
+    def circuit_open(self) -> bool:
+        return False
+
+    def circuit_snapshot(self) -> dict[str, Any]:
+        return {
+            "state": "closed",
+            "consecutive_risk_control_count": 0,
+            "threshold": None,
+            "opened_at": None,
+            "cooldown_seconds": 0,
+            "cooldown_until": None,
+            "automatic_resume": False,
+        }
+
+    def restore_risk_control_state(
+        self,
+        consecutive_count: int,
+        *,
+        opened_at: datetime | str | None = None,
+    ) -> None:
+        if consecutive_count or opened_at is not None:
+            raise ValueError("UAPI creator capture cannot resume a Bilibili risk-control circuit")
+
+    async def _sleep_with_cancellation(
+        self,
+        seconds: float,
+        cancel_check: CancelCheck | None,
+    ) -> None:
+        remaining = max(0.0, seconds)
+        while remaining > 0:
+            if await _is_cancelled(cancel_check):
+                raise asyncio.CancelledError
+            step = min(0.1, remaining)
+            await self._sleep(step)
+            remaining -= step
+
+    async def _wait(self, cancel_check: CancelCheck | None) -> float:
+        if await _is_cancelled(cancel_check):
+            raise asyncio.CancelledError
+        if self._last_request_started is None:
+            return 0.0
+        remaining = self._min_interval_seconds - (time.monotonic() - self._last_request_started)
+        waited = max(0.0, remaining)
+        if waited:
+            await self._sleep_with_cancellation(waited, cancel_check)
+        return waited
+
+    async def _get(
+        self,
+        url: str,
+        *,
+        params: dict[str, Any],
+        cancel_check: CancelCheck | None,
+    ) -> httpx.Response:
+        task = asyncio.create_task(self._client.get(
+            url,
+            params=params,
+            headers={"Authorization": f"Bearer {self._api_key}"},
+        ))
+        try:
+            while not task.done():
+                done, _ = await asyncio.wait({task}, timeout=0.25)
+                if done:
+                    break
+                if await _is_cancelled(cancel_check):
+                    task.cancel()
+                    await asyncio.gather(task, return_exceptions=True)
+                    raise asyncio.CancelledError
+            return await task
+        except BaseException:
+            if not task.done():
+                task.cancel()
+            raise
+
+    def _append_attempt(
+        self,
+        attempts: list[CreatorRequestAttempt],
+        *,
+        operation: Literal["uapi_archives", "uapi_userinfo"],
+        attempt_number: int,
+        started_at: datetime,
+        rate_limit_wait_seconds: float,
+        retry_backoff_seconds: float,
+        classification: str,
+        http_status: int | None = None,
+        error_type: str | None = None,
+    ) -> None:
+        attempts.append(CreatorRequestAttempt(
+            operation=operation,
+            attempt_number=attempt_number,
+            started_at=started_at,
+            completed_at=self._now(),
+            rate_limit_wait_seconds=rate_limit_wait_seconds,
+            retry_backoff_seconds=retry_backoff_seconds,
+            classification=classification,
+            http_status=http_status,
+            error_type=error_type,
+        ))
+
+    async def _request_json(
+        self,
+        operation: Literal["uapi_archives", "uapi_userinfo"],
+        path: str,
+        *,
+        params: dict[str, Any],
+        attempts: list[CreatorRequestAttempt],
+        cancel_check: CancelCheck | None,
+    ) -> dict[str, Any]:
+        retry_delay = 0.0
+        for attempt_index in range(self._max_retries + 1):
+            if retry_delay:
+                await self._sleep_with_cancellation(retry_delay, cancel_check)
+            rate_limit_wait_seconds = await self._wait(cancel_check)
+            started_at = self._now()
+            self._last_request_started = time.monotonic()
+            try:
+                response = await self._get(
+                    f"{self._base_url}{path}",
+                    params=params,
+                    cancel_check=cancel_check,
+                )
+            except asyncio.CancelledError:
+                self._append_attempt(
+                    attempts,
+                    operation=operation,
+                    attempt_number=attempt_index + 1,
+                    started_at=started_at,
+                    rate_limit_wait_seconds=rate_limit_wait_seconds,
+                    retry_backoff_seconds=retry_delay,
+                    classification="cancelled",
+                )
+                raise
+            except (httpx.TimeoutException, asyncio.TimeoutError) as exc:
+                self._append_attempt(
+                    attempts,
+                    operation=operation,
+                    attempt_number=attempt_index + 1,
+                    started_at=started_at,
+                    rate_limit_wait_seconds=rate_limit_wait_seconds,
+                    retry_backoff_seconds=retry_delay,
+                    classification="timeout",
+                    error_type=type(exc).__name__,
+                )
+                if attempt_index < self._max_retries:
+                    retry_delay = self._backoff_base_seconds * (2 ** attempt_index)
+                    continue
+                raise _CreatorRequestFailure("timeout", f"{operation}_timeout") from exc
+            except httpx.RequestError as exc:
+                self._append_attempt(
+                    attempts,
+                    operation=operation,
+                    attempt_number=attempt_index + 1,
+                    started_at=started_at,
+                    rate_limit_wait_seconds=rate_limit_wait_seconds,
+                    retry_backoff_seconds=retry_delay,
+                    classification="connection_error",
+                    error_type=type(exc).__name__,
+                )
+                if attempt_index < self._max_retries:
+                    retry_delay = self._backoff_base_seconds * (2 ** attempt_index)
+                    continue
+                raise _CreatorRequestFailure("connection_error", f"{operation}_connection_error") from exc
+
+            status_code = response.status_code
+            if status_code in {401, 403}:
+                self._append_attempt(
+                    attempts,
+                    operation=operation,
+                    attempt_number=attempt_index + 1,
+                    started_at=started_at,
+                    rate_limit_wait_seconds=rate_limit_wait_seconds,
+                    retry_backoff_seconds=retry_delay,
+                    classification="authentication_error",
+                    http_status=status_code,
+                )
+                raise _CreatorRequestFailure("authentication_error", f"{operation}_authentication_error")
+            if status_code == 404:
+                self._append_attempt(
+                    attempts,
+                    operation=operation,
+                    attempt_number=attempt_index + 1,
+                    started_at=started_at,
+                    rate_limit_wait_seconds=rate_limit_wait_seconds,
+                    retry_backoff_seconds=retry_delay,
+                    classification="not_found",
+                    http_status=status_code,
+                )
+                raise _CreatorRequestFailure("not_found", f"{operation}_not_found")
+            if status_code == 429:
+                self._append_attempt(
+                    attempts,
+                    operation=operation,
+                    attempt_number=attempt_index + 1,
+                    started_at=started_at,
+                    rate_limit_wait_seconds=rate_limit_wait_seconds,
+                    retry_backoff_seconds=retry_delay,
+                    classification="http_429",
+                    http_status=status_code,
+                )
+                if attempt_index < self._max_retries:
+                    retry_delay = _retry_after_seconds(response.headers.get("Retry-After"), self._now())
+                    if retry_delay is None:
+                        retry_delay = self._backoff_base_seconds * (2 ** attempt_index)
+                    continue
+                raise _CreatorRequestFailure("http_429", f"{operation}_http_429")
+            if 500 <= status_code <= 599:
+                self._append_attempt(
+                    attempts,
+                    operation=operation,
+                    attempt_number=attempt_index + 1,
+                    started_at=started_at,
+                    rate_limit_wait_seconds=rate_limit_wait_seconds,
+                    retry_backoff_seconds=retry_delay,
+                    classification="http_5xx",
+                    http_status=status_code,
+                )
+                if attempt_index < self._max_retries:
+                    retry_delay = self._backoff_base_seconds * (2 ** attempt_index)
+                    continue
+                raise _CreatorRequestFailure("http_5xx", f"{operation}_http_{status_code}")
+            if status_code != 200:
+                self._append_attempt(
+                    attempts,
+                    operation=operation,
+                    attempt_number=attempt_index + 1,
+                    started_at=started_at,
+                    rate_limit_wait_seconds=rate_limit_wait_seconds,
+                    retry_backoff_seconds=retry_delay,
+                    classification="http_error",
+                    http_status=status_code,
+                )
+                raise _CreatorRequestFailure("http_error", f"{operation}_http_{status_code}")
+            try:
+                payload = response.json()
+            except (ValueError, json.JSONDecodeError) as exc:
+                self._append_attempt(
+                    attempts,
+                    operation=operation,
+                    attempt_number=attempt_index + 1,
+                    started_at=started_at,
+                    rate_limit_wait_seconds=rate_limit_wait_seconds,
+                    retry_backoff_seconds=retry_delay,
+                    classification="invalid_json",
+                    http_status=status_code,
+                    error_type=type(exc).__name__,
+                )
+                raise _CreatorRequestFailure("invalid_json", f"{operation}_invalid_json") from exc
+            if not isinstance(payload, dict):
+                self._append_attempt(
+                    attempts,
+                    operation=operation,
+                    attempt_number=attempt_index + 1,
+                    started_at=started_at,
+                    rate_limit_wait_seconds=rate_limit_wait_seconds,
+                    retry_backoff_seconds=retry_delay,
+                    classification="invalid_payload",
+                    http_status=status_code,
+                )
+                raise _CreatorRequestFailure(
+                    "invalid_payload",
+                    f"{operation}_invalid_payload",
+                    raw_hash=raw_payload_hash(payload),
+                )
+            self._append_attempt(
+                attempts,
+                operation=operation,
+                attempt_number=attempt_index + 1,
+                started_at=started_at,
+                rate_limit_wait_seconds=rate_limit_wait_seconds,
+                retry_backoff_seconds=retry_delay,
+                classification="success",
+                http_status=status_code,
+            )
+            return payload
+        raise AssertionError("bounded UAPI creator request loop exhausted unexpectedly")
+
+    def _request_audit(
+        self,
+        attempts: list[CreatorRequestAttempt],
+        final_classification: str,
+    ) -> CreatorRequestAudit:
+        return CreatorRequestAudit(
+            attempt_count=len(attempts),
+            retry_count=sum(attempt.attempt_number > 1 for attempt in attempts),
+            total_rate_limit_wait_seconds=sum(attempt.rate_limit_wait_seconds for attempt in attempts),
+            total_backoff_seconds=sum(attempt.retry_backoff_seconds for attempt in attempts),
+            final_classification=final_classification,
+            attempts=attempts,
+        )
+
+    async def fetch_creator(
+        self,
+        creator_mid: str,
+        creator_name: str,
+        cancel_check: CancelCheck | None = None,
+    ) -> CreatorSample:
+        observed_at = self._now()
+        profile_url = f"https://space.bilibili.com/{creator_mid}" if creator_mid else "https://space.bilibili.com/"
+        if not creator_mid:
+            return self._failure(
+                "",
+                creator_name,
+                profile_url,
+                observed_at,
+                CreatorSampleStatus.MISSING,
+                "creator_mid_missing",
+                request_audit=self._request_audit([], "missing_mid"),
+            )
+        if not self._api_key:
+            return self._failure(
+                creator_mid,
+                creator_name,
+                profile_url,
+                observed_at,
+                CreatorSampleStatus.FAILED,
+                "uapi_authentication_missing",
+                request_audit=self._request_audit([], "authentication_missing"),
+            )
+        if await _is_cancelled(cancel_check):
+            return self._failure(
+                creator_mid,
+                creator_name,
+                profile_url,
+                observed_at,
+                CreatorSampleStatus.CANCELLED,
+                "cancelled",
+                request_audit=self._request_audit([], "cancelled"),
+            )
+
+        attempts: list[CreatorRequestAttempt] = []
+        async with self._request_lock:
+            try:
+                archives_payload = await self._request_json(
+                    "uapi_archives",
+                    UAPI_ARCHIVES_PATH,
+                    params={"mid": creator_mid, "orderby": "pubdate", "ps": LATEST_UPLOAD_LIMIT, "pn": 1},
+                    attempts=attempts,
+                    cancel_check=cancel_check,
+                )
+            except asyncio.CancelledError:
+                return self._failure(
+                    creator_mid,
+                    creator_name,
+                    profile_url,
+                    observed_at,
+                    CreatorSampleStatus.CANCELLED,
+                    "cancelled",
+                    request_audit=self._request_audit(attempts, "cancelled"),
+                )
+            except _CreatorRequestFailure as exc:
+                status = (
+                    CreatorSampleStatus.MISSING
+                    if exc.classification == "not_found"
+                    else CreatorSampleStatus.TIMEOUT
+                    if exc.classification == "timeout"
+                    else CreatorSampleStatus.FAILED
+                )
+                return self._failure(
+                    creator_mid,
+                    creator_name,
+                    profile_url,
+                    observed_at,
+                    status,
+                    exc.reason,
+                    raw_hash=exc.raw_hash,
+                    request_audit=self._request_audit(attempts, exc.classification),
+                )
+
+            archives_data = archives_payload.get("data") if isinstance(archives_payload.get("data"), dict) else archives_payload
+            raw_uploads = archives_data.get("videos") if isinstance(archives_data, dict) else None
+            if not isinstance(raw_uploads, list):
+                return self._failure(
+                    creator_mid,
+                    creator_name,
+                    profile_url,
+                    observed_at,
+                    CreatorSampleStatus.FAILED,
+                    "uapi_archives_videos_missing",
+                    raw_hash=raw_payload_hash(archives_payload),
+                    request_audit=self._request_audit(attempts, "invalid_payload"),
+                )
+
+            userinfo_payload: dict[str, Any] | None = None
+            userinfo_failure: _CreatorRequestFailure | None = None
+            try:
+                userinfo_payload = await self._request_json(
+                    "uapi_userinfo",
+                    UAPI_USERINFO_PATH,
+                    params={"uid": creator_mid},
+                    attempts=attempts,
+                    cancel_check=cancel_check,
+                )
+            except asyncio.CancelledError:
+                return self._failure(
+                    creator_mid,
+                    creator_name,
+                    profile_url,
+                    observed_at,
+                    CreatorSampleStatus.CANCELLED,
+                    "cancelled",
+                    request_audit=self._request_audit(attempts, "cancelled"),
+                )
+            except _CreatorRequestFailure as exc:
+                userinfo_failure = exc
+
+        userinfo_data = (
+            userinfo_payload.get("data")
+            if isinstance(userinfo_payload, dict) and isinstance(userinfo_payload.get("data"), dict)
+            else userinfo_payload
+        )
+        resolved_name = (
+            str(userinfo_data.get("name") or "").strip()
+            if isinstance(userinfo_data, dict)
+            else ""
+        ) or creator_name
+        follower_count = _safe_int(userinfo_data.get("follower")) if isinstance(userinfo_data, dict) else None
+        uploads = [
+            video
+            for rank, item in enumerate(raw_uploads[:LATEST_UPLOAD_LIMIT], 1)
+            if (video := self._normalize_video(item, creator_mid, resolved_name, rank, observed_at)) is not None
+        ]
+        if raw_uploads and not uploads:
+            return self._failure(
+                creator_mid,
+                resolved_name,
+                profile_url,
+                observed_at,
+                CreatorSampleStatus.FAILED,
+                "uapi_archives_items_invalid",
+                raw_hash=raw_payload_hash({"archives": archives_payload, "userinfo": userinfo_payload}),
+                request_audit=self._request_audit(attempts, "invalid_payload"),
+            )
+
+        recent_30d = sum(
+            video.published_at is not None and video.published_at >= observed_at - timedelta(days=30)
+            for video in uploads
+        )
+        recent_90d = sum(
+            video.published_at is not None and video.published_at >= observed_at - timedelta(days=90)
+            for video in uploads
+        )
+        missing_reasons = []
+        if not uploads:
+            missing_reasons.append("no_public_uploads")
+        if userinfo_failure is not None:
+            missing_reasons.append(userinfo_failure.reason)
+        elif not resolved_name or follower_count is None:
+            missing_reasons.append("uapi_userinfo_fields_missing")
+        if len(uploads) < len(raw_uploads[:LATEST_UPLOAD_LIMIT]):
+            missing_reasons.append("some_uploads_failed_normalization")
+        status = CreatorSampleStatus.PARTIAL if missing_reasons else CreatorSampleStatus.SUCCESS
+        source_url = (
+            f"{self._base_url}{UAPI_ARCHIVES_PATH}?mid={creator_mid}"
+            f"&orderby=pubdate&ps={LATEST_UPLOAD_LIMIT}&pn=1"
+        )
+        return CreatorSample(
+            creator_mid=creator_mid,
+            creator_name=resolved_name,
+            profile_url=profile_url,
+            status=status,
+            observed_at=observed_at,
+            provider_name=self.capabilities.provider_name,
+            provider_version=self.capabilities.provider_version,
+            provider_kind=self.capabilities.provider_kind,
+            source_provider_name=self.capabilities.provider_name,
+            source_provider_version=self.capabilities.provider_version,
+            source_url=source_url,
+            follower_count=follower_count,
+            uploads=uploads,
+            recent_30d_upload_count=recent_30d,
+            recent_90d_upload_count=recent_90d,
+            missing_reason=",".join(dict.fromkeys(missing_reasons)) or None,
+            raw_payload_hash=raw_payload_hash({"archives": archives_payload, "userinfo": userinfo_payload}),
+            request_audit=self._request_audit(attempts, "partial" if missing_reasons else "success"),
+        )
+
+    def _failure(
+        self,
+        creator_mid: str,
+        creator_name: str,
+        profile_url: str,
+        observed_at: datetime,
+        status: CreatorSampleStatus,
+        reason: str,
+        *,
+        raw_hash: str | None = None,
+        request_audit: CreatorRequestAudit | None = None,
+    ) -> CreatorSample:
+        return CreatorSample(
+            creator_mid=creator_mid,
+            creator_name=creator_name,
+            profile_url=profile_url,
+            status=status,
+            observed_at=observed_at,
+            provider_name=self.capabilities.provider_name,
+            provider_version=self.capabilities.provider_version,
+            provider_kind=self.capabilities.provider_kind,
+            source_provider_name=self.capabilities.provider_name,
+            source_provider_version=self.capabilities.provider_version,
+            source_url=f"{self._base_url}{UAPI_ARCHIVES_PATH}?mid={creator_mid}",
+            missing_reason=reason,
+            raw_payload_hash=raw_hash,
+            request_audit=request_audit,
+        )
+
+    def _normalize_video(
+        self,
+        item: Any,
+        creator_mid: str,
+        creator_name: str,
+        rank: int,
+        observed_at: datetime,
+    ) -> CreatorVideo | None:
+        if not isinstance(item, dict):
+            return None
+        bvid = str(item.get("bvid") or "").strip()
+        title = str(item.get("title") or "").strip()
+        if not re.fullmatch(r"BV[0-9A-Za-z]{10}", bvid) or not title:
+            return None
+        fields = {
+            "description": None,
+            "tags": [],
+            "partition": None,
+            "published_at": _parse_datetime(item.get("publish_time")),
+            "duration_seconds": _duration_seconds(item.get("duration")),
+            "cover_url": str(item.get("cover") or "").strip() or None,
+            "view": _safe_int(item.get("play_count")),
+            "like": None,
+            "coin": None,
+            "favorite": None,
+            "reply": None,
+            "share": None,
+            "danmaku": None,
+        }
+        missing_fields = [name for name, value in fields.items() if value is None or value == []]
+        return CreatorVideo(
+            bvid=bvid,
+            creator_mid=creator_mid,
+            creator_name=creator_name,
+            title=title,
+            source_url=f"https://www.bilibili.com/video/{bvid}",
+            observed_at=observed_at,
+            provider_name=self.capabilities.provider_name,
+            provider_version=self.capabilities.provider_version,
+            sample_rank=rank,
+            raw_payload_hash=raw_payload_hash(item),
+            missing_fields=missing_fields,
+            **fields,
+        )
+
+
 class CreatorImportVideoPayload(StrictModel):
     bvid: str = Field(pattern=r"^BV[0-9A-Za-z]{10}$")
     title: str = Field(min_length=1)
@@ -950,6 +1584,7 @@ class CreatorImportCoverageReport(StrictModel):
     source_basis: Literal[
         "unspecified",
         "public_unauthenticated_capture",
+        "third_party_development_api",
         "user_authorized_export",
         "authorized_supplier_export",
         "fixture",
@@ -972,6 +1607,7 @@ class CreatorImportPayload(StrictModel):
     source_basis: Literal[
         "unspecified",
         "public_unauthenticated_capture",
+        "third_party_development_api",
         "user_authorized_export",
         "authorized_supplier_export",
         "fixture",
@@ -1008,6 +1644,11 @@ class CreatorImportPayload(StrictModel):
                 raise ValueError("public unauthenticated capture must remain development_only")
             if not self.capture_round_id:
                 raise ValueError("public unauthenticated capture requires capture_round_id")
+        elif self.source_basis == "third_party_development_api":
+            if self.authorization_status != "development_only":
+                raise ValueError("third-party development APIs must remain development_only")
+            if not self.capture_round_id:
+                raise ValueError("third-party development APIs require capture_round_id")
         elif self.source_basis == "user_authorized_export":
             if self.authorization_status not in {"user_attested", "written_authorization"}:
                 raise ValueError("user-authorized exports require attested or written authorization")
@@ -1288,6 +1929,13 @@ def creator_provider_capability_catalog() -> list[dict[str, Any]]:
             provider_name="import",
             provider_version=CREATOR_IMPORT_PROVIDER_VERSION,
             provider_kind="import",
+        ).model_dump(mode="json"),
+        CreatorProviderCapabilities(
+            provider_name="uapi-creator",
+            provider_version=UAPI_CREATOR_PROVIDER_VERSION,
+            provider_kind="development",
+            requires_api_key=True,
+            commercial_authorization="development_only",
         ).model_dump(mode="json"),
         CreatorProviderCapabilities(
             provider_name="fixture",

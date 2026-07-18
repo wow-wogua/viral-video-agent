@@ -37,7 +37,7 @@ class JobCreate(BaseModel):
     intent_definition: str = Field(default="", max_length=2000)
     allowed_subtopics: list[str] = Field(default_factory=list, max_length=20)
     exclusion_rules: list[str] = Field(default_factory=list, max_length=20)
-    creator_provider: Literal["development", "import"] = "development"
+    creator_provider: Literal["development", "uapi", "import"] = "development"
     creator_import_format: Literal["json", "csv"] | None = None
     creator_import_data: dict[str, Any] | str | None = None
     idempotency_key: str = Field(min_length=8, max_length=128)

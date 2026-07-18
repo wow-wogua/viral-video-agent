@@ -29,10 +29,10 @@ from src.intelligence.contracts import (
     SearchRequest,
 )
 from src.intelligence.creator_providers import (
-    BILIBILI_CREATOR_PROVIDER_VERSION,
     CREATOR_IMPORT_PROVIDER_VERSION,
     BilibiliDevelopmentCreatorProvider,
     ImportCreatorProvider,
+    UAPIDevelopmentCreatorProvider,
     creator_scope_hash,
 )
 from src.intelligence.evaluation import EvaluationKeyword, validate_evaluation_file
@@ -211,12 +211,23 @@ def _capture_summary(
     target_count: int,
     capture_round_id: str,
     scope_sha256: str,
+    selection_rule: str,
+    provider: dict[str, Any],
     circuit: dict[str, Any],
 ) -> dict[str, Any]:
     entries = list(cache.values())
     status_counts = Counter(entry.get("status", "missing") for entry in entries)
     reason_counts = Counter(entry.get("missing_reason") or "none" for entry in entries)
     audits = [entry.get("request_audit") or {} for entry in entries]
+    provider_resolved_entries = [
+        entry for entry in entries if entry.get("status") in {"success", "partial"}
+    ]
+    usable_entries = [entry for entry in provider_resolved_entries if entry.get("uploads")]
+    uploads = [upload for entry in usable_entries for upload in entry.get("uploads", [])]
+
+    def completion_rate(values: list[bool]) -> float | None:
+        return round(sum(values) / len(values), 6) if values else None
+
     attempted_count = sum(int(audit.get("attempt_count") or 0) > 0 for audit in audits)
     not_attempted_count = sum(
         entry.get("missing_reason") == "not_attempted_due_to_risk_control"
@@ -231,12 +242,17 @@ def _capture_summary(
         capture_status = "in_progress"
     return {
         "capture_round_id": capture_round_id,
+        "selection_rule": selection_rule,
+        "provider": provider,
         "target_scope_sha256": scope_sha256,
         "target_count": target_count,
         "resolved_target_count": resolved_count,
         "attempted_count": attempted_count,
         "not_attempted_count": not_attempted_count,
-        "usable_sample_count": status_counts.get("success", 0) + status_counts.get("partial", 0),
+        "provider_resolved_count": len(provider_resolved_entries),
+        "usable_sample_count": len(usable_entries),
+        "usable_sample_rate": round(len(usable_entries) / target_count, 6) if target_count else 0.0,
+        "empty_upload_sample_count": len(provider_resolved_entries) - len(usable_entries),
         "capture_status": capture_status,
         "status_counts": dict(status_counts),
         "reason_counts": dict(reason_counts),
@@ -246,7 +262,38 @@ def _capture_summary(
             float(audit.get("total_rate_limit_wait_seconds") or 0) for audit in audits
         ),
         "total_backoff_seconds": sum(float(audit.get("total_backoff_seconds") or 0) for audit in audits),
+        "field_completeness": {
+            "upload_count": len(uploads),
+            "bvid_rate": completion_rate([bool(upload.get("bvid")) for upload in uploads]),
+            "title_rate": completion_rate([bool(upload.get("title")) for upload in uploads]),
+            "published_at_rate": completion_rate([upload.get("published_at") is not None for upload in uploads]),
+            "view_rate": completion_rate([upload.get("view") is not None for upload in uploads]),
+            "follower_count_rate": completion_rate([
+                entry.get("follower_count") is not None for entry in usable_entries
+            ]),
+        },
         "circuit": circuit,
+    }
+
+
+def _capture_readiness(summary: dict[str, Any]) -> dict[str, Any]:
+    completeness = summary.get("field_completeness") or {}
+    checks = {
+        "exact_target_resolution": summary.get("resolved_target_count") == summary.get("target_count"),
+        "usable_sample_rate_at_least_90pct": float(summary.get("usable_sample_rate") or 0) >= 0.9,
+        "bvid_rate_at_least_95pct": float(completeness.get("bvid_rate") or 0) >= 0.95,
+        "title_rate_at_least_95pct": float(completeness.get("title_rate") or 0) >= 0.95,
+        "published_at_rate_at_least_95pct": float(completeness.get("published_at_rate") or 0) >= 0.95,
+        "view_rate_at_least_90pct": float(completeness.get("view_rate") or 0) >= 0.9,
+        "follower_count_rate_at_least_90pct": float(completeness.get("follower_count_rate") or 0) >= 0.9,
+    }
+    return {
+        "passed": all(checks.values()),
+        "checks": checks,
+        "usable_sample_count": summary.get("usable_sample_count"),
+        "target_count": summary.get("target_count"),
+        "usable_sample_rate": summary.get("usable_sample_rate"),
+        "field_completeness": completeness,
     }
 
 
@@ -255,7 +302,8 @@ async def capture_creator_targets(
     output: Path,
     *,
     capture_round_id: str,
-    provider: BilibiliDevelopmentCreatorProvider,
+    provider: BilibiliDevelopmentCreatorProvider | UAPIDevelopmentCreatorProvider,
+    selection_rule: str = "caller_supplied_fixed_order",
 ) -> CreatorCaptureResult:
     if not capture_round_id.strip():
         raise ValueError("capture_round_id is required")
@@ -275,6 +323,8 @@ async def capture_creator_targets(
             raise ValueError("new creator capture rounds require a new output directory and round ID")
         if existing.get("target_scope_sha256") != scope_sha256 or existing.get("target_count") != len(targets):
             raise ValueError("creator capture target scope changed; start a new capture round")
+        if existing.get("selection_rule", "caller_supplied_fixed_order") != selection_rule:
+            raise ValueError("creator capture selection rule changed; start a new capture round")
         existing_provider = existing.get("provider") or {}
         if existing_provider.get("provider_version") != provider.capabilities.provider_version:
             raise ValueError("creator capture provider version changed; start a new capture round")
@@ -293,6 +343,8 @@ async def capture_creator_targets(
             target_count=len(targets),
             capture_round_id=capture_round_id,
             scope_sha256=scope_sha256,
+            selection_rule=selection_rule,
+            provider=provider.capabilities.model_dump(mode="json"),
             circuit=circuit,
         )
         json_dump_atomic(progress_path, {
@@ -301,6 +353,7 @@ async def capture_creator_targets(
             "created_at": created_at,
             "updated_at": datetime.now(timezone.utc),
             "provider": provider.capabilities.model_dump(mode="json"),
+            "selection_rule": selection_rule,
             "target_scope_sha256": scope_sha256,
             "target_count": len(targets),
             "summary": summary,
@@ -342,6 +395,7 @@ async def capture_creator_samples(
     capture_round_id: str,
     creator_capture_limit: int | None,
     min_interval_seconds: float,
+    provider_kind: str,
 ) -> CreatorCaptureResult:
     targets: dict[str, tuple[str, str]] = {}
     for keyword in keywords:
@@ -355,16 +409,25 @@ async def capture_creator_samples(
         candidates = rank_creator_audits(aggregate_candidates(bundles[keyword.id].videos), context)
         for candidate in candidates[:max_creator_audits]:
             targets.setdefault(candidate.creator_mid, (candidate.creator_mid, candidate.creator_name))
-    ordered_targets = list(targets.values())
+    ordered_targets = sorted(
+        targets.values(),
+        key=lambda target: (hashlib.sha256(target[0].encode("utf-8")).hexdigest(), target[0]),
+    )
     if creator_capture_limit is not None:
         ordered_targets = ordered_targets[:creator_capture_limit]
-    provider = BilibiliDevelopmentCreatorProvider(min_interval_seconds=min_interval_seconds)
+    if provider_kind == "uapi":
+        provider = UAPIDevelopmentCreatorProvider(min_interval_seconds=min_interval_seconds)
+    elif provider_kind == "development":
+        provider = BilibiliDevelopmentCreatorProvider(min_interval_seconds=min_interval_seconds)
+    else:
+        raise ValueError(f"unsupported private creator capture provider: {provider_kind}")
     try:
         return await capture_creator_targets(
             ordered_targets,
             output,
             capture_round_id=capture_round_id,
             provider=provider,
+            selection_rule="sha256_mid_ascending_v1",
         )
     finally:
         await provider.close()
@@ -478,8 +541,9 @@ async def main_async(args) -> int:
         raise ValueError("bounded creator_capture_limit is only valid with --capture-only")
     if args.creator_capture_limit is not None and args.creator_capture_limit < 1:
         raise ValueError("creator_capture_limit must be positive")
-    if args.creator_min_interval_seconds < 1.0:
-        raise ValueError("real creator capture interval must be at least one second")
+    minimum_interval = 1.5 if args.creator_provider == "uapi" else 1.0
+    if args.creator_min_interval_seconds < minimum_interval:
+        raise ValueError(f"{args.creator_provider} creator capture interval must be at least {minimum_interval} seconds")
     run_metadata_path = output / "recovery-run-metadata.json"
     if output.exists() and any(output.iterdir()):
         if not run_metadata_path.exists():
@@ -491,6 +555,8 @@ async def main_async(args) -> int:
             raise ValueError("creator capture mode changed; start a new capture round")
         if run_metadata.get("creator_capture_limit") != args.creator_capture_limit:
             raise ValueError("creator capture limit changed; start a new capture round")
+        if run_metadata.get("creator_provider", "development") != args.creator_provider:
+            raise ValueError("creator capture provider changed; start a new capture round")
         if (
             "creator_min_interval_seconds" in run_metadata
             and float(run_metadata["creator_min_interval_seconds"]) != args.creator_min_interval_seconds
@@ -504,6 +570,7 @@ async def main_async(args) -> int:
             "created_at": datetime.now(timezone.utc),
             "capture_only": args.capture_only,
             "creator_capture_limit": args.creator_capture_limit,
+            "creator_provider": args.creator_provider,
             "creator_min_interval_seconds": args.creator_min_interval_seconds,
         })
 
@@ -533,8 +600,11 @@ async def main_async(args) -> int:
         capture_round_id=args.capture_round_id,
         creator_capture_limit=args.creator_capture_limit,
         min_interval_seconds=args.creator_min_interval_seconds,
+        provider_kind=args.creator_provider,
     )
     json_dump(output / "recovery-capture-summary.json", creator_capture.summary)
+    capture_readiness = _capture_readiness(creator_capture.summary)
+    json_dump(output / "creator-capture-readiness.json", capture_readiness)
     if args.capture_only:
         print(
             f"capture_status={creator_capture.summary['capture_status']} output={output}",
@@ -550,11 +620,29 @@ async def main_async(args) -> int:
         })
         print("gate_status=not_run reason=creator_capture_incomplete_due_to_risk_control", flush=True)
         return 2
+    if not capture_readiness["passed"]:
+        json_dump(output / "gate-not-run-summary.json", {
+            "gate_status": "not_run",
+            "reason": "creator_capture_below_data_readiness_gate",
+            "entered_p0d": False,
+            "capture": creator_capture.summary,
+            "readiness": capture_readiness,
+        })
+        print("gate_status=not_run reason=creator_capture_below_data_readiness_gate", flush=True)
+        return 2
     creator_import_payload = {
         "schema_version": "creator-import.p0.1",
-        "source_name": "p0-c-public-creator-capture-import-replay",
+        "source_name": (
+            "p0-c-uapi-creator-capture-import-replay"
+            if args.creator_provider == "uapi"
+            else "p0-c-public-creator-capture-import-replay"
+        ),
         "provider_version": CREATOR_IMPORT_PROVIDER_VERSION,
-        "source_basis": "public_unauthenticated_capture",
+        "source_basis": (
+            "third_party_development_api"
+            if args.creator_provider == "uapi"
+            else "public_unauthenticated_capture"
+        ),
         "authorization_status": "development_only",
         "capture_round_id": args.capture_round_id,
         "coverage_scope_sha256": creator_scope_hash(set(creator_capture.creators)),
@@ -652,7 +740,7 @@ async def main_async(args) -> int:
         "scoring_version": "competitor-score.p0.1",
         "qualification_policy_version": "creator-qualification.p0.1",
         "schema_version": "content-intelligence.p0.1",
-        "creator_provider_capture_version": BILIBILI_CREATOR_PROVIDER_VERSION,
+        "creator_provider_capture_version": creator_capture.summary["provider"]["provider_version"],
         "creator_import_provider_version": CREATOR_IMPORT_PROVIDER_VERSION,
         "max_creator_audits_per_keyword": args.max_creator_audits,
         "precision_gate_passed": precision_passed,
@@ -723,7 +811,8 @@ def main() -> int:
     parser.add_argument("--capture-round-id", required=True)
     parser.add_argument("--capture-only", action="store_true")
     parser.add_argument("--creator-capture-limit", type=int)
-    parser.add_argument("--creator-min-interval-seconds", type=float, default=1.0)
+    parser.add_argument("--creator-provider", choices=("development", "uapi"), default="development")
+    parser.add_argument("--creator-min-interval-seconds", type=float, default=1.5)
     return asyncio.run(main_async(parser.parse_args()))
 
 

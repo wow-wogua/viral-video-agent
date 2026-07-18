@@ -1,3 +1,4 @@
+import asyncio
 import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -12,6 +13,7 @@ from src.intelligence.creator_providers import (
     BilibiliDevelopmentCreatorProvider,
     FixtureCreatorProvider,
     ImportCreatorProvider,
+    UAPIDevelopmentCreatorProvider,
     creator_scope_hash,
 )
 
@@ -150,6 +152,264 @@ async def test_development_creator_provider_missing_upload_list_is_failed_not_em
     assert sample.status == CreatorSampleStatus.FAILED
     assert sample.uploads == []
     assert sample.missing_reason == "uploads_list_missing"
+
+
+def uapi_archives_payload(upload_count=3):
+    return {
+        "total": upload_count,
+        "page": 1,
+        "size": 20,
+        "videos": [{
+            "aid": index,
+            "bvid": f"BV{index:010d}",
+            "title": f"sanitized UAPI upload {index}",
+            "cover": "https://example.test/cover.png",
+            "duration": 180 + index,
+            "play_count": 10000 + index,
+            "publish_time": int((NOW - timedelta(days=index)).timestamp()),
+            "create_time": int((NOW - timedelta(days=index)).timestamp()),
+            "state": 0,
+            "is_ugc_pay": 0,
+            "is_interactive": False,
+        } for index in range(1, upload_count + 1)],
+    }
+
+
+def uapi_userinfo_payload():
+    return {
+        "mid": 90001,
+        "name": "sanitized UAPI creator",
+        "follower": 23456,
+        "archive_count": 3,
+    }
+
+
+async def no_wait(seconds):
+    return None
+
+
+@pytest.mark.asyncio
+async def test_uapi_creator_provider_normalizes_development_only_source_without_leaking_key(capsys):
+    secret = "test-uapi-secret"
+    requests = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        assert request.headers["Authorization"] == f"Bearer {secret}"
+        if request.url.path.endswith("/archives"):
+            return httpx.Response(200, json=uapi_archives_payload(), request=request)
+        if request.url.path.endswith("/userinfo"):
+            return httpx.Response(200, json=uapi_userinfo_payload(), request=request)
+        raise AssertionError(request.url)
+
+    provider = UAPIDevelopmentCreatorProvider(
+        api_key=secret,
+        client=httpx.AsyncClient(transport=httpx.MockTransport(handler)),
+        min_interval_seconds=1.5,
+        sleep=no_wait,
+        now=lambda: NOW,
+    )
+    sample = await provider.fetch_creator("90001", "fallback creator")
+    assert sample.status == CreatorSampleStatus.SUCCESS
+    assert sample.creator_name == "sanitized UAPI creator"
+    assert sample.follower_count == 23456
+    assert len(sample.uploads) == 3
+    assert sample.uploads[0].published_at is not None
+    assert sample.uploads[0].view == 10001
+    assert sample.uploads[0].like is None
+    assert sample.provider_name == "uapi-creator"
+    assert sample.provider_kind == "development"
+    assert provider.capabilities.requires_api_key
+    assert provider.capabilities.commercial_authorization == "development_only"
+    assert sample.request_audit.final_classification == "success"
+    assert [attempt.operation for attempt in sample.request_audit.attempts] == [
+        "uapi_archives", "uapi_userinfo"
+    ]
+    assert secret not in sample.model_dump_json()
+    assert secret not in capsys.readouterr().out
+    assert len(requests) == 2
+
+
+@pytest.mark.asyncio
+async def test_uapi_creator_provider_partial_missing_and_missing_authentication_states():
+    requests = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        if request.url.path.endswith("/archives"):
+            if request.url.params["mid"] == "40400":
+                return httpx.Response(404, json={"code": "NOT_FOUND"}, request=request)
+            return httpx.Response(200, json=uapi_archives_payload(), request=request)
+        return httpx.Response(502, json={"code": "UPSTREAM_ERROR"}, request=request)
+
+    provider = UAPIDevelopmentCreatorProvider(
+        api_key="test-key",
+        client=httpx.AsyncClient(transport=httpx.MockTransport(handler)),
+        max_retries=0,
+        min_interval_seconds=1.5,
+        sleep=no_wait,
+        now=lambda: NOW,
+    )
+    partial = await provider.fetch_creator("90001", "fallback creator")
+    assert partial.status == CreatorSampleStatus.PARTIAL
+    assert partial.uploads
+    assert partial.follower_count is None
+    assert "uapi_userinfo_http_502" in partial.missing_reason
+
+    missing = await provider.fetch_creator("40400", "missing creator")
+    assert missing.status == CreatorSampleStatus.MISSING
+    assert missing.request_audit.final_classification == "not_found"
+
+    no_auth_requests = []
+    no_auth = UAPIDevelopmentCreatorProvider(
+        api_key="",
+        client=httpx.AsyncClient(transport=httpx.MockTransport(
+            lambda request: no_auth_requests.append(request) or pytest.fail("missing authentication must not call UAPI")
+        )),
+        min_interval_seconds=1.5,
+        sleep=no_wait,
+        now=lambda: NOW,
+    )
+    unauthenticated = await no_auth.fetch_creator("90001", "fallback creator")
+    assert unauthenticated.status == CreatorSampleStatus.FAILED
+    assert unauthenticated.missing_reason == "uapi_authentication_missing"
+    assert unauthenticated.request_audit.final_classification == "authentication_missing"
+    assert no_auth_requests == []
+
+
+@pytest.mark.asyncio
+async def test_uapi_creator_provider_honors_retry_after_and_does_not_retry_ordinary_4xx():
+    archives_attempts = 0
+    sleeps = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal archives_attempts
+        if request.url.path.endswith("/archives"):
+            archives_attempts += 1
+            if request.url.params["mid"] == "40100":
+                return httpx.Response(401, json={"code": "UNAUTHENTICATED"}, request=request)
+            if request.url.params["mid"] == "40000":
+                return httpx.Response(400, json={"code": "INVALID_ARGUMENT"}, request=request)
+            if archives_attempts == 1:
+                return httpx.Response(429, headers={"Retry-After": "2"}, request=request)
+            return httpx.Response(200, json=uapi_archives_payload(1), request=request)
+        return httpx.Response(200, json=uapi_userinfo_payload(), request=request)
+
+    async def fake_sleep(seconds):
+        sleeps.append(seconds)
+
+    provider = UAPIDevelopmentCreatorProvider(
+        api_key="test-key",
+        client=httpx.AsyncClient(transport=httpx.MockTransport(handler)),
+        max_retries=2,
+        min_interval_seconds=1.5,
+        sleep=fake_sleep,
+        now=lambda: NOW,
+    )
+    sample = await provider.fetch_creator("90001", "fallback creator")
+    assert sample.status == CreatorSampleStatus.SUCCESS
+    assert [attempt.classification for attempt in sample.request_audit.attempts] == [
+        "http_429", "success", "success"
+    ]
+    assert sample.request_audit.total_backoff_seconds == pytest.approx(2.0)
+    assert sum(sleeps) >= 2.0
+
+    bad_request = await provider.fetch_creator("40000", "fallback creator")
+    assert bad_request.status == CreatorSampleStatus.FAILED
+    assert bad_request.request_audit.retry_count == 0
+    assert bad_request.request_audit.attempts[0].classification == "http_error"
+
+    authentication_error = await provider.fetch_creator("40100", "fallback creator")
+    assert authentication_error.status == CreatorSampleStatus.FAILED
+    assert authentication_error.request_audit.retry_count == 0
+    assert authentication_error.request_audit.final_classification == "authentication_error"
+
+
+@pytest.mark.parametrize(
+    ("failure_kind", "expected_status", "expected_classification"),
+    [
+        ("timeout", CreatorSampleStatus.TIMEOUT, "timeout"),
+        ("connection", CreatorSampleStatus.FAILED, "connection_error"),
+        ("5xx", CreatorSampleStatus.FAILED, "http_5xx"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_uapi_creator_provider_bounds_transient_retries(
+    failure_kind,
+    expected_status,
+    expected_classification,
+):
+    attempts = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal attempts
+        attempts += 1
+        if failure_kind == "timeout":
+            raise httpx.ReadTimeout("fixture timeout", request=request)
+        if failure_kind == "connection":
+            raise httpx.ConnectError("fixture connection", request=request)
+        return httpx.Response(503, json={"code": "UPSTREAM_ERROR"}, request=request)
+
+    provider = UAPIDevelopmentCreatorProvider(
+        api_key="test-key",
+        client=httpx.AsyncClient(transport=httpx.MockTransport(handler)),
+        max_retries=2,
+        min_interval_seconds=1.5,
+        sleep=no_wait,
+        now=lambda: NOW,
+    )
+    sample = await provider.fetch_creator("90001", "fallback creator")
+    assert sample.status == expected_status
+    assert sample.request_audit.final_classification == expected_classification
+    assert sample.request_audit.retry_count == 2
+    assert attempts == 3
+
+
+@pytest.mark.asyncio
+async def test_uapi_creator_provider_cancellation_and_interval_floor():
+    with pytest.raises(ValueError, match="at least 1.5 seconds"):
+        UAPIDevelopmentCreatorProvider(api_key="test-key", min_interval_seconds=1.49)
+    provider = UAPIDevelopmentCreatorProvider(
+        api_key="test-key",
+        client=httpx.AsyncClient(transport=httpx.MockTransport(lambda request: pytest.fail("cancelled call"))),
+        min_interval_seconds=1.5,
+        sleep=no_wait,
+        now=lambda: NOW,
+    )
+    cancelled = await provider.fetch_creator("90001", "fallback creator", cancel_check=_true)
+    assert cancelled.status == CreatorSampleStatus.CANCELLED
+    assert cancelled.request_audit.attempt_count == 0
+
+
+@pytest.mark.asyncio
+async def test_uapi_creator_provider_serializes_concurrent_creator_requests():
+    active = 0
+    max_active = 0
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal active, max_active
+        active += 1
+        max_active = max(max_active, active)
+        await asyncio.sleep(0)
+        active -= 1
+        if request.url.path.endswith("/archives"):
+            return httpx.Response(200, json=uapi_archives_payload(1), request=request)
+        return httpx.Response(200, json=uapi_userinfo_payload(), request=request)
+
+    provider = UAPIDevelopmentCreatorProvider(
+        api_key="test-key",
+        client=httpx.AsyncClient(transport=httpx.MockTransport(handler)),
+        min_interval_seconds=1.5,
+        sleep=no_wait,
+        now=lambda: NOW,
+    )
+    first, second = await asyncio.gather(
+        provider.fetch_creator("90001", "first"),
+        provider.fetch_creator("90002", "second"),
+    )
+    assert first.status == CreatorSampleStatus.SUCCESS
+    assert second.status == CreatorSampleStatus.SUCCESS
+    assert max_active == 1
 
 
 @pytest.mark.asyncio
@@ -331,6 +591,20 @@ def test_import_creator_provider_validates_neutral_coverage_and_source_authoriza
     assert coverage.authorization_documented
     with pytest.raises(ValueError, match="missing=1, unexpected=1"):
         provider.validate_coverage({"99999"}, require_exact=True)
+
+    uapi_payload = json.loads(FIXTURE.read_text(encoding="utf-8"))
+    uapi_payload.update({
+        "source_basis": "third_party_development_api",
+        "authorization_status": "development_only",
+        "capture_round_id": "sanitized-uapi-round",
+        "coverage_target_count": 1,
+        "coverage_scope_sha256": creator_scope_hash({"90001"}),
+    })
+    uapi_import = ImportCreatorProvider.from_json(uapi_payload)
+    report = uapi_import.validate_coverage({"90001"}, require_exact=True, require_source_declared=True)
+    assert report.source_basis == "third_party_development_api"
+    assert report.authorization_status == "development_only"
+    assert not report.authorization_documented
 
 
 @pytest.mark.asyncio
