@@ -17,6 +17,7 @@ from src.intelligence.contracts import (
     TopicSpec,
 )
 from src.intelligence.creator_topic import (
+    apply_human_review,
     assess_creator_topic,
     route_keyword_reviews,
     select_v2_top_competitors,
@@ -161,6 +162,53 @@ def test_relevant_low_specialization_is_a_valid_independent_human_combination():
     assert review.human_specialization == SpecializationLevel.LOW
 
 
+def test_human_review_overlay_recomputes_product_relation_and_clears_selection():
+    payload, evidence = candidate(relevant=7, irrelevant=3, generalist=False)
+    assessment = select_v2_top_competitors([
+        assess_creator_topic(TOPIC, payload, evidence),
+    ])[0]
+    assert assessment.selected
+    review = HumanCreatorTopicReview(
+        review_id="review_1234567890abcdef",
+        keyword_id=assessment.keyword_id,
+        creator_mid=assessment.creator_mid,
+        human_relevance="relevant",
+        human_specialization="low",
+        human_role="generalist",
+        human_reason="relevant but not sufficiently specialized for core selection",
+        review_complete=True,
+    )
+
+    overlaid = apply_human_review(assessment, review)
+
+    assert overlaid.relevance == AccountTopicRelevance.RELEVANT
+    assert overlaid.specialization == SpecializationLevel.LOW
+    assert overlaid.role == CreatorTopicRole.GENERALIST
+    assert overlaid.product_relation == CreatorProductRelation.ADJACENT_BENCHMARK
+    assert not overlaid.selected
+    assert overlaid.selection_rank is None
+
+
+def test_human_aggregator_role_preserves_hard_exclusion():
+    payload, evidence = candidate(relevant=6, irrelevant=1, generalist=False)
+    assessment = assess_creator_topic(TOPIC, payload, evidence)
+    review = HumanCreatorTopicReview(
+        review_id="review_1234567890abcdef",
+        keyword_id=assessment.keyword_id,
+        creator_mid=assessment.creator_mid,
+        human_relevance="relevant",
+        human_specialization="high",
+        human_role="aggregator",
+        human_reason="the account primarily aggregates or republishes material",
+        review_complete=True,
+    )
+
+    overlaid = apply_human_review(assessment, review)
+
+    assert overlaid.product_relation == CreatorProductRelation.EXCLUDED
+    assert BoundaryRisk.AGGREGATION_OR_REUPLOAD in overlaid.boundary_risks
+
+
 def test_generalist_with_sustained_medium_focus_is_adjacent_not_core():
     payload, evidence = candidate(relevant=4, irrelevant=6, generalist=True)
     assessment = assess_creator_topic(TOPIC, payload, evidence)
@@ -237,6 +285,20 @@ def test_v2_top5_only_uses_core_is_unpadded_and_input_order_stable():
     ]
     assert [item.creator_mid for item in forward if item.selected] == ["90001", "90002"]
     assert sum(item.selected for item in forward) == 2
+
+
+def test_v2_selection_prioritizes_frozen_qualified_references_without_hardcoding_accounts():
+    payloads = [candidate(str(90_001 + index), score=90 - index) for index in range(6)]
+    assessments = [
+        assess_creator_topic(TOPIC, payload, evidence)
+        for payload, evidence in payloads
+    ]
+    preferred_mid = assessments[-1].creator_mid
+
+    selected = select_v2_top_competitors(assessments, preferred_mids={preferred_mid})
+
+    assert preferred_mid in {item.creator_mid for item in selected if item.selected}
+    assert sum(item.selected for item in selected) == 5
 
 
 def test_review_router_prioritizes_unlabelled_selected_and_reuses_frozen_labels():

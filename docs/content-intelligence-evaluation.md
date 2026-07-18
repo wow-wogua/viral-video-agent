@@ -86,3 +86,5 @@
 Gate 盲评工作簿隐藏 LLM 建议、系统分数、v1/v2 选择状态、qualification、产品关系、Gate 指标和原人工标签。Review Router 优先覆盖 v2 未标注选中、v1 unresolved 选中、v1/v2 冲突、规则/语义冲突和每关键词最多 1 个非选中抽样，并复用已有 frozen qualified/excluded 标签。
 
 人工导入必须严格校验 review_id 唯一性与全集覆盖、枚举、reason、完成状态和不合法组合；不得静默修正输入。v2 Gate 完成后继续以冻结 qualified reference set 计算 Retrieval Recall，非选中分层抽样只作为 sampled false-negative audit。完整规则见 [P0-C v2 方案C](content-intelligence-p0c-scheme-c.md)。
+
+最终选择复用已有 frozen 人工状态：`qualified_reference` 在 `core_competitor` 内优先占用 Top 5 槽位，`excluded` 不进入选择；新盲审标签只通过版本化的 relevance / specialization / role overlay 和确定性关系门禁生效，不修改关键词、基础评分权重或评测公式。2026-07-18 的 53 项审核严格导入后冲突数为 0，正式 v2 Gate 的 strict Precision@5 为 100.00%、不相关误判率为 0.00%；因实际 `reviewer_count=1`，状态为 `with_reservation`，不允许进入 P0-D。

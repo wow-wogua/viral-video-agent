@@ -418,6 +418,41 @@ def _influence_passes(evidence: CreatorTopicEvidence) -> bool:
     )
 
 
+def _product_relation(
+    *,
+    relevance: AccountTopicRelevance,
+    specialization: SpecializationLevel,
+    role: CreatorTopicRole,
+    evidence: CreatorTopicEvidence,
+    system_confidence: SystemConfidence,
+    risks: Sequence[BoundaryRisk],
+) -> CreatorProductRelation:
+    hard_risk = (
+        BoundaryRisk.AGGREGATION_OR_REUPLOAD in risks
+        or role in {CreatorTopicRole.AGGREGATOR, CreatorTopicRole.UNRELATED}
+    )
+    if relevance == AccountTopicRelevance.IRRELEVANT or hard_risk:
+        return CreatorProductRelation.EXCLUDED
+    if relevance == AccountTopicRelevance.UNCERTAIN:
+        return (
+            CreatorProductRelation.OCCASIONAL_HIT
+            if evidence.relevant_upload_count > 0 or evidence.search_relevant_video_count > 0
+            else CreatorProductRelation.INSUFFICIENT_EVIDENCE
+        )
+    if (
+        system_confidence.score < CORE_SYSTEM_CONFIDENCE_MIN
+        or BoundaryRisk.MISSING_EVIDENCE in risks
+        or BoundaryRisk.SEMANTIC_RULE_CONFLICT in risks
+        or not _influence_passes(evidence)
+    ):
+        return CreatorProductRelation.INSUFFICIENT_EVIDENCE
+    if specialization == SpecializationLevel.LOW or (
+        role == CreatorTopicRole.GENERALIST and specialization != SpecializationLevel.HIGH
+    ):
+        return CreatorProductRelation.ADJACENT_BENCHMARK
+    return CreatorProductRelation.CORE_COMPETITOR
+
+
 def assess_creator_topic(
     topic_spec: TopicSpec,
     candidate: Mapping[str, Any],
@@ -440,27 +475,14 @@ def assess_creator_topic(
     )
     system_confidence = _system_confidence(topic_spec, candidate, evidence, risks)
     influence = _influence_passes(evidence)
-    if relevance == AccountTopicRelevance.IRRELEVANT or hard_risk:
-        relation = CreatorProductRelation.EXCLUDED
-    elif relevance == AccountTopicRelevance.UNCERTAIN:
-        relation = (
-            CreatorProductRelation.OCCASIONAL_HIT
-            if evidence.relevant_upload_count > 0 or evidence.search_relevant_video_count > 0
-            else CreatorProductRelation.INSUFFICIENT_EVIDENCE
-        )
-    elif (
-        system_confidence.score < CORE_SYSTEM_CONFIDENCE_MIN
-        or BoundaryRisk.MISSING_EVIDENCE in risks
-        or BoundaryRisk.SEMANTIC_RULE_CONFLICT in risks
-        or not influence
-    ):
-        relation = CreatorProductRelation.INSUFFICIENT_EVIDENCE
-    elif specialization == SpecializationLevel.LOW or (
-        role == CreatorTopicRole.GENERALIST and specialization != SpecializationLevel.HIGH
-    ):
-        relation = CreatorProductRelation.ADJACENT_BENCHMARK
-    else:
-        relation = CreatorProductRelation.CORE_COMPETITOR
+    relation = _product_relation(
+        relevance=relevance,
+        specialization=specialization,
+        role=role,
+        evidence=evidence,
+        system_confidence=system_confidence,
+        risks=risks,
+    )
     rationale = [
         f"relevance={relevance.value}",
         f"specialization={specialization.value}",
@@ -488,6 +510,56 @@ def assess_creator_topic(
     )
 
 
+def apply_human_review(
+    assessment: CreatorTopicAssessment,
+    review: HumanCreatorTopicReview,
+) -> CreatorTopicAssessment:
+    if not review.review_complete:
+        raise ValueError("human review must be complete before overlay")
+    if review.keyword_id != assessment.keyword_id or review.creator_mid != assessment.creator_mid:
+        raise ValueError(f"human review identity mismatch: {review.review_id}")
+    if review.human_relevance is None or review.human_specialization is None or review.human_role is None:
+        raise ValueError("completed human review is missing a required dimension")
+
+    resolved_risks = [
+        risk
+        for risk in assessment.boundary_risks
+        if risk not in {BoundaryRisk.SEMANTIC_RULE_CONFLICT, BoundaryRisk.AGGREGATION_OR_REUPLOAD}
+        and not (
+            risk == BoundaryRisk.PROFILE_CONTENT_CONFLICT
+            and review.human_relevance == AccountTopicRelevance.RELEVANT
+        )
+    ]
+    if review.human_role == CreatorTopicRole.AGGREGATOR:
+        resolved_risks.append(BoundaryRisk.AGGREGATION_OR_REUPLOAD)
+    resolved_risks = list(dict.fromkeys(resolved_risks))
+    relation = _product_relation(
+        relevance=review.human_relevance,
+        specialization=review.human_specialization,
+        role=review.human_role,
+        evidence=assessment.evidence,
+        system_confidence=assessment.system_confidence,
+        risks=resolved_risks,
+    )
+    return assessment.model_copy(update={
+        "relevance": review.human_relevance,
+        "specialization": review.human_specialization,
+        "role": review.human_role,
+        "product_relation": relation,
+        "boundary_risks": resolved_risks,
+        "selected": False,
+        "selection_rank": None,
+        "rationale": [
+            *assessment.rationale,
+            f"human_review_id={review.review_id}",
+            f"human_relevance={review.human_relevance.value}",
+            f"human_specialization={review.human_specialization.value}",
+            f"human_role={review.human_role.value}",
+            f"human_reason={review.human_reason.strip()}",
+        ],
+    })
+
+
 def _selection_key(assessment: CreatorTopicAssessment) -> tuple[Any, ...]:
     tie = assessment.base_tie_break_values
     search_relevant = int(tie[2]) if len(tie) > 2 else assessment.evidence.search_relevant_video_count
@@ -505,8 +577,14 @@ def _selection_key(assessment: CreatorTopicAssessment) -> tuple[Any, ...]:
 
 def select_v2_top_competitors(
     assessments: Sequence[CreatorTopicAssessment],
+    *,
+    preferred_mids: set[str] | None = None,
 ) -> list[CreatorTopicAssessment]:
-    ordered = sorted(assessments, key=_selection_key)
+    preferred = preferred_mids or set()
+    ordered = sorted(
+        assessments,
+        key=lambda item: (0 if item.creator_mid in preferred else 1, *_selection_key(item)),
+    )
     selected_mids = {
         item.creator_mid: rank
         for rank, item in enumerate(
