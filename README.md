@@ -102,6 +102,7 @@ Compose 包含 8 个服务：`frontend`、`app`、`worker`、`postgres`、`redis
 - [2026-07-16 P0-C Creator Provider Recovery](docs/content-intelligence-p0c-recovery-20260716.md)
 - [2026-07-16 P0-C Creator 数据源收口](docs/content-intelligence-p0c-source-recovery-20260716.md)
 - [2026-07-18 P0-C UAPI Creator 数据源与正式 Gate](docs/content-intelligence-p0c-uapi-gate-20260718.md)
+- [P0-C v2 方案C：账号—主题关系与人机协同审核](docs/content-intelligence-p0c-scheme-c.md)
 - [权限、数据与 Evidence 边界](docs/security-and-data.md)
 - [2026-07-13 验收记录](docs/validation-20260713.md)
 
@@ -249,7 +250,9 @@ cd ..
 docker compose config --quiet
 ```
 
-当前完整 Python 回归为 169 条测试。P0-C 的工程链路、Creator Provider Recovery 与 UAPI development-only 接入已实现。UAPI 完整采集取得 387/394 可评分 Creator 样本和 98.22% 可用覆盖，解决了原数据源阻塞；但原冻结 Gate 仍因 selected precision 18.42%、strict Precision@5 33.33% 和 unresolved selection rate 76.32% 未通过。不相关误判率为 5.26%，来源追溯和分数拆解通过。下一阻塞是账号级人工标签覆盖与资格/评分校准，不能进入 P0-D。详细结果见 [验证记录](docs/content-intelligence-p0c-validation-20260716.md)、[Recovery 记录](docs/content-intelligence-p0c-recovery-20260716.md)、[Creator 数据源收口](docs/content-intelligence-p0c-source-recovery-20260716.md)和 [UAPI正式 Gate](docs/content-intelligence-p0c-uapi-gate-20260718.md)。
+当前完整 Python 回归为 182 条测试。P0-C 的工程链路、Creator Provider Recovery 与 UAPI development-only 接入已实现。UAPI 完整采集取得 387/394 可评分 Creator 样本和 98.22% 可用覆盖，解决了原数据源阻塞；但原冻结 Gate 仍因 selected precision 18.42%、strict Precision@5 33.33% 和 unresolved selection rate 76.32% 未通过。不相关误判率为 5.26%，来源追溯和分数拆解通过。
+
+P0-C v2 方案C已增加版本化 TopicSpec、账号—主题 relevance/specialization/role、产品关系、确定性 Boundary Guard、system confidence 和 Review Router，并在不调用 UAPI、不新增 LLM 调用的条件下精确复现 v1 正式指标。当前已生成 53 个关键词—账号盲审单元，等待 1 名真实人工审核者完成；审核前的 v2 暂定选择不是正式 Gate 结果。P0-D 继续被阻塞。详细结果见 [验证记录](docs/content-intelligence-p0c-validation-20260716.md)、[Recovery 记录](docs/content-intelligence-p0c-recovery-20260716.md)、[Creator 数据源收口](docs/content-intelligence-p0c-source-recovery-20260716.md)、[UAPI正式 Gate](docs/content-intelligence-p0c-uapi-gate-20260718.md)和 [方案C说明](docs/content-intelligence-p0c-scheme-c.md)。
 
 ### 真实 API 冒烟（2026-07-13）
 

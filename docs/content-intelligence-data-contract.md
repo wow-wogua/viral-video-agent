@@ -23,6 +23,9 @@
 - `CreatorSample` / `CreatorVideo`：独立 Creator Provider 的公开主页观测、最新最多20条投稿、30/90天窗口、来源和缺失状态；不与搜索候选页混写。
 - `CreatorQualificationEvidence`：关键词范围内的账号主页、最新投稿审计、近 90 天样本与相关计数、粉丝、相关播放中位数和 Evidence；不得由单条搜索视频或仅历史集中投稿推导当前资格。
 - `CompetitorScore`：分项、扣分、总分、置信度和入选/排除理由。
+- `TopicSpec`：版本化关键词意图、允许子主题和排除规则；离线 Gate 复用冻结字段，不由 LLM 重写。
+- `CreatorTopicEvidence` / `CreatorTopicAssessment`：确定性账号投稿聚合、relevance、specialization、role、产品关系、边界风险、模型置信度与系统置信度拆解。
+- `ReviewRoutingDecision` / `HumanCreatorTopicReview`：确定性审核路由和严格人工输入契约；现有冻结人工标签不重复进入盲审。
 - `RepresentativeSelection`：选择类型、顺序、原因和 Evidence。
 - `MetricResult`：固定指标枚举、公式版本、数值、分母、窗口、缺失和极端值规则。
 - `IntelligenceReport`：查询、覆盖、竞品、指标、差异、风险、建议和 Evidence。
@@ -63,3 +66,5 @@ Search Provider、分页编排、Import Provider、规范化、去重、per-craw
 ## P0-C 实现
 
 Creator Provider、逐视频相关性、资格政策、评分、Top 5、评测公式和独立查询接口见 [P0-C Creator Provider、竞品相关性与 Top 5](content-intelligence-competitor-scoring.md)。P0-C 只保存结构化账号审计和竞品结果，不创建正常报告，不进入代表视频、ASR、确定性商业指标或 `IntelligenceReport`。
+
+P0-C v2 方案C保留上述 v1 对象和入口，新增 `topic-spec.p0.1`、`creator-topic-assessment.p0.1`、`system-confidence.p0.1`、`review-routing.p0.1` 与 `competitor-selection.p0.2`。v2 Top 5 只从 `core_competitor` 关系中产生；`adjacent_benchmark` 单独输出，证据不足或低置信度不能补满 Top 5。详见 [P0-C v2 方案C](content-intelligence-p0c-scheme-c.md)。

@@ -74,3 +74,15 @@
 `competitor-evaluation.p0.1` 同时报告 selected precision、strict Precision@5、不相关账号误判率、unresolved selection rate、输出覆盖、Retrieval Recall、类别统计和 abstention。少于5个输出时，strict Precision@5 的分母为 `min(5, 当前检索池中 qualified_reference 数)`，空槽位不能被隐藏；没有 qualified 槽位时该指标为 null，并保留 0 输出事实。完整公式见 [P0-C Creator Provider、竞品相关性与 Top 5](content-intelligence-competitor-scoring.md)。
 
 当前私有文件为 1 名真实人工复核，`reviewer_count=1`，没有标注者一致性证据。模型、程序校验或聊天协助不得计作第二名人工。
+
+## P0-C v2 方案C人工审核
+
+方案C不继续旧 400 项逐视频全量审核，而是审核有限的“关键词—账号”单元，并把三个维度独立填写：
+
+- `human_relevance`：relevant / irrelevant / uncertain。
+- `human_specialization`：high / medium / low / unknown。
+- `human_role`：跨赛道通用账号角色。
+
+Gate 盲评工作簿隐藏 LLM 建议、系统分数、v1/v2 选择状态、qualification、产品关系、Gate 指标和原人工标签。Review Router 优先覆盖 v2 未标注选中、v1 unresolved 选中、v1/v2 冲突、规则/语义冲突和每关键词最多 1 个非选中抽样，并复用已有 frozen qualified/excluded 标签。
+
+人工导入必须严格校验 review_id 唯一性与全集覆盖、枚举、reason、完成状态和不合法组合；不得静默修正输入。v2 Gate 完成后继续以冻结 qualified reference set 计算 Retrieval Recall，非选中分层抽样只作为 sampled false-negative audit。完整规则见 [P0-C v2 方案C](content-intelligence-p0c-scheme-c.md)。

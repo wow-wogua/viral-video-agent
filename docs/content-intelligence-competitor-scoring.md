@@ -100,3 +100,15 @@ docker compose config --quiet
 ```
 
 完整 20 关键词、真实账号样本、逐视频标签和评测结果只允许写入仓库外私有目录。当前人工基线只有 1 名真实复核者，不存在双人标注或标注者一致性证据；该限制不阻塞工程执行，但必须作为 Gate 保留项。
+
+## P0-C v2 方案C兼容层
+
+方案C在 v1 评分对象旁新增版本化账号—主题关系层，不覆盖 `competitor-score.p0.1`：
+
+- `TopicSpec` 固定关键词意图、允许子主题和排除规则；离线评测不重新调用 LLM。
+- Evidence Builder 确定性汇总搜索命中、账号投稿、相关/不相关/不确定数量、相关比例、30/90 天连续性、主页/公开信息、标题证据、字段缺失和 Evidence ID。
+- 现有 `RelevanceLabeler` 只提供语义建议；兼容适配器读取旧缓存，缺少字段保持 unknown。
+- Boundary Guard 检查单条命中、search-only、偶然命中、混合内容、样本不足、90 天连续性、低相关比例、聚合/搬运、Evidence 缺失和语义/规则冲突。
+- `model_confidence` 与确定性 `system_confidence` 分开保存；后者由样本状态、标签覆盖、投稿覆盖、时间完整度、阈值 margin、连续性、冲突和 Evidence 完整度按固定权重计算。
+
+v2 产品关系为 `core_competitor`、`adjacent_benchmark`、`occasional_hit`、`excluded`、`insufficient_evidence`。v2 Top 5 只在 `core_competitor` 内按 v1 基础分、系统置信度和稳定 tie-break 选择；相邻标杆单独展示，合格不足 5 个时不补位。P0-C v2 不包含代表视频、ASR、确定性商业指标或正常报告，详见 [P0-C v2 方案C](content-intelligence-p0c-scheme-c.md)。

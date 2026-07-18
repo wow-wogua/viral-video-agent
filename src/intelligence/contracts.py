@@ -13,6 +13,11 @@ CONTENT_INTELLIGENCE_SCHEMA_VERSION = "content-intelligence.p0.1"
 SCORING_VERSION = "competitor-score.p0.1"
 METRIC_FORMULA_VERSION = "content-metrics.p0.1"
 CREATOR_QUALIFICATION_POLICY_VERSION = "creator-qualification.p0.1"
+TOPIC_SPEC_VERSION = "topic-spec.p0.1"
+CREATOR_TOPIC_ASSESSMENT_VERSION = "creator-topic-assessment.p0.1"
+SYSTEM_CONFIDENCE_VERSION = "system-confidence.p0.1"
+REVIEW_ROUTING_VERSION = "review-routing.p0.1"
+CREATOR_SELECTION_VERSION_V2 = "competitor-selection.p0.2"
 MAX_SEARCH_PAGES = 5
 MAX_COMPETITORS = 5
 REPRESENTATIVE_VIDEO_TARGET = 6
@@ -84,6 +89,54 @@ class CreatorQualificationStatus(StrEnum):
     EMERGING_CANDIDATE = "emerging_candidate"
     QUALIFIED_REFERENCE = "qualified_reference"
     EXCLUDED = "excluded"
+
+
+class AccountTopicRelevance(StrEnum):
+    RELEVANT = "relevant"
+    IRRELEVANT = "irrelevant"
+    UNCERTAIN = "uncertain"
+
+
+class SpecializationLevel(StrEnum):
+    HIGH = "high"
+    MEDIUM = "medium"
+    LOW = "low"
+    UNKNOWN = "unknown"
+
+
+class CreatorTopicRole(StrEnum):
+    SPECIALIST = "specialist"
+    GENERALIST = "generalist"
+    OFFICIAL = "official"
+    MEDIA = "media"
+    EDUCATOR = "educator"
+    REVIEWER = "reviewer"
+    SERVICE = "service"
+    AGGREGATOR = "aggregator"
+    UNRELATED = "unrelated"
+    UNKNOWN = "unknown"
+
+
+class CreatorProductRelation(StrEnum):
+    CORE_COMPETITOR = "core_competitor"
+    ADJACENT_BENCHMARK = "adjacent_benchmark"
+    OCCASIONAL_HIT = "occasional_hit"
+    EXCLUDED = "excluded"
+    INSUFFICIENT_EVIDENCE = "insufficient_evidence"
+
+
+class BoundaryRisk(StrEnum):
+    SINGLE_VIDEO_BIAS = "single_video_bias"
+    SEARCH_ONLY_RELEVANCE = "search_only_relevance"
+    OCCASIONAL_HIT = "occasional_hit"
+    MIXED_CONTENT = "mixed_content"
+    INSUFFICIENT_SAMPLE = "insufficient_sample"
+    INSUFFICIENT_90D_CONTINUITY = "insufficient_90d_continuity"
+    LOW_RELEVANT_RATIO = "low_relevant_ratio"
+    PROFILE_CONTENT_CONFLICT = "profile_content_conflict"
+    AGGREGATION_OR_REUPLOAD = "aggregation_or_reupload"
+    MISSING_EVIDENCE = "missing_evidence"
+    SEMANTIC_RULE_CONFLICT = "semantic_rule_conflict"
 
 
 class MetricName(StrEnum):
@@ -421,6 +474,191 @@ class CreatorSemanticAssessment(StrictModel):
     confidence: float = Field(ge=0, le=1)
     labeler: str
     labeler_version: str
+
+
+class TopicSpec(StrictModel):
+    version: Literal[TOPIC_SPEC_VERSION] = TOPIC_SPEC_VERSION
+    keyword_id: str = Field(min_length=1, max_length=120)
+    keyword: str = Field(min_length=1, max_length=200)
+    category: Literal["broad", "vertical", "brand", "ambiguous", "low_result"]
+    intent_definition: str = Field(min_length=1, max_length=2000)
+    allowed_subtopics: list[str] = Field(default_factory=list, max_length=20)
+    exclusion_rules: list[str] = Field(default_factory=list, max_length=20)
+
+
+class CreatorTopicVideoEvidence(StrictModel):
+    bvid: str
+    title: str
+    description: str | None = None
+    published_at: datetime | None = None
+    view: int | None = Field(default=None, ge=0)
+    source_url: str
+    evidence_ids: list[str] = Field(default_factory=list)
+
+
+class CreatorTopicEvidence(StrictModel):
+    creator_mid: str
+    creator_name: str
+    profile_url: str | None = None
+    sample_status: CreatorSampleStatus
+    observed_at: datetime | None = None
+    search_video_count: int = Field(ge=0)
+    search_relevant_video_count: int = Field(ge=0)
+    search_irrelevant_video_count: int = Field(ge=0)
+    search_uncertain_video_count: int = Field(ge=0)
+    sampled_upload_count: int = Field(ge=0, le=20)
+    decided_upload_count: int = Field(ge=0, le=20)
+    relevant_upload_count: int = Field(ge=0, le=20)
+    irrelevant_upload_count: int = Field(ge=0, le=20)
+    uncertain_upload_count: int = Field(ge=0, le=20)
+    relevant_ratio: float | None = Field(default=None, ge=0, le=1)
+    recent_30d_upload_count: int = Field(ge=0, le=20)
+    recent_90d_upload_count: int = Field(ge=0, le=20)
+    relevant_30d_upload_count: int = Field(ge=0, le=20)
+    relevant_90d_upload_count: int = Field(ge=0, le=20)
+    follower_count: int | None = Field(default=None, ge=0)
+    relevant_view_median: float | None = Field(default=None, ge=0)
+    published_at_completeness: float = Field(ge=0, le=1)
+    label_coverage: float = Field(ge=0, le=1)
+    sample_coverage: float = Field(ge=0, le=1)
+    evidence_ids: list[str] = Field(default_factory=list)
+    source_urls: list[str] = Field(default_factory=list)
+    search_examples: list[CreatorTopicVideoEvidence] = Field(default_factory=list)
+    upload_examples: list[CreatorTopicVideoEvidence] = Field(default_factory=list)
+    relevant_examples: list[CreatorTopicVideoEvidence] = Field(default_factory=list)
+    irrelevant_examples: list[CreatorTopicVideoEvidence] = Field(default_factory=list)
+    missing_fields: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_topic_evidence_counts(self) -> "CreatorTopicEvidence":
+        if (
+            self.search_relevant_video_count
+            + self.search_irrelevant_video_count
+            + self.search_uncertain_video_count
+            != self.search_video_count
+        ):
+            raise ValueError("search topic-evidence label counts must equal search videos")
+        if self.decided_upload_count != self.relevant_upload_count + self.irrelevant_upload_count:
+            raise ValueError("decided upload count must equal relevant plus irrelevant uploads")
+        if (
+            self.relevant_upload_count
+            + self.irrelevant_upload_count
+            + self.uncertain_upload_count
+            != self.sampled_upload_count
+        ):
+            raise ValueError("topic evidence label counts must equal sampled uploads")
+        if self.relevant_30d_upload_count > self.relevant_90d_upload_count:
+            raise ValueError("relevant 30-day uploads cannot exceed relevant 90-day uploads")
+        if self.relevant_90d_upload_count > self.relevant_upload_count:
+            raise ValueError("relevant 90-day uploads cannot exceed relevant uploads")
+        return self
+
+
+class SystemConfidenceComponent(StrictModel):
+    value: float = Field(ge=0, le=1)
+    weight: float = Field(gt=0, le=1)
+    reason: str = Field(min_length=1, max_length=300)
+
+
+class SystemConfidence(StrictModel):
+    version: Literal[SYSTEM_CONFIDENCE_VERSION] = SYSTEM_CONFIDENCE_VERSION
+    score: float = Field(ge=0, le=1)
+    components: dict[str, SystemConfidenceComponent]
+    formula: str
+
+    @model_validator(mode="after")
+    def validate_confidence_formula(self) -> "SystemConfidence":
+        total_weight = sum(component.weight for component in self.components.values())
+        if abs(total_weight - 1.0) > 1e-6:
+            raise ValueError("system-confidence component weights must sum to 1")
+        expected = sum(component.value * component.weight for component in self.components.values())
+        if abs(self.score - round(expected, 6)) > 1e-6:
+            raise ValueError("system-confidence score must equal the weighted components")
+        return self
+
+
+class CreatorTopicAssessment(StrictModel):
+    version: Literal[CREATOR_TOPIC_ASSESSMENT_VERSION] = CREATOR_TOPIC_ASSESSMENT_VERSION
+    topic_spec_version: Literal[TOPIC_SPEC_VERSION] = TOPIC_SPEC_VERSION
+    selection_version: Literal[CREATOR_SELECTION_VERSION_V2] = CREATOR_SELECTION_VERSION_V2
+    base_scoring_version: Literal[SCORING_VERSION] = SCORING_VERSION
+    keyword_id: str
+    creator_mid: str
+    creator_name: str
+    relevance: AccountTopicRelevance
+    specialization: SpecializationLevel
+    role: CreatorTopicRole
+    product_relation: CreatorProductRelation
+    model_confidence: float = Field(ge=0, le=1)
+    system_confidence: SystemConfidence
+    boundary_risks: list[BoundaryRisk] = Field(default_factory=list)
+    evidence: CreatorTopicEvidence
+    base_score: float = Field(ge=0, le=100)
+    base_tie_break_values: list[str | int | float] = Field(default_factory=list)
+    selected: bool = False
+    selection_rank: int | None = Field(default=None, ge=1, le=MAX_COMPETITORS)
+    rationale: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_v2_selection(self) -> "CreatorTopicAssessment":
+        if self.selected and self.product_relation != CreatorProductRelation.CORE_COMPETITOR:
+            raise ValueError("only core_competitor accounts can be selected by v2")
+        if self.selected != (self.selection_rank is not None):
+            raise ValueError("v2 selected and selection_rank must be set together")
+        return self
+
+
+class ReviewRoutingDecision(StrictModel):
+    version: Literal[REVIEW_ROUTING_VERSION] = REVIEW_ROUTING_VERSION
+    review_id: str = Field(pattern=r"^review_[a-f0-9]{16}$")
+    keyword_id: str
+    creator_mid: str
+    requires_human_review: bool
+    priority: int | None = Field(default=None, ge=1, le=5)
+    reasons: list[str] = Field(default_factory=list)
+    include_in_blind_workbook: bool
+    existing_human_label: bool = False
+
+    @model_validator(mode="after")
+    def validate_review_route(self) -> "ReviewRoutingDecision":
+        if self.requires_human_review and self.priority is None:
+            raise ValueError("human-review routes require a priority")
+        if self.include_in_blind_workbook and not self.requires_human_review:
+            raise ValueError("blind workbook entries must require human review")
+        if self.existing_human_label and self.include_in_blind_workbook:
+            raise ValueError("existing frozen human labels must not be reviewed again")
+        return self
+
+
+class HumanCreatorTopicReview(StrictModel):
+    review_id: str = Field(pattern=r"^review_[a-f0-9]{16}$")
+    keyword_id: str
+    creator_mid: str
+    human_relevance: AccountTopicRelevance | None = None
+    human_specialization: SpecializationLevel | None = None
+    human_role: CreatorTopicRole | None = None
+    human_reason: str = Field(default="", max_length=1000)
+    review_complete: bool = False
+
+    @model_validator(mode="after")
+    def validate_completed_review(self) -> "HumanCreatorTopicReview":
+        if not self.review_complete:
+            return self
+        if self.human_relevance is None or self.human_specialization is None or self.human_role is None:
+            raise ValueError("completed human reviews require relevance, specialization, and role")
+        if not self.human_reason.strip():
+            raise ValueError("completed human reviews require a reason")
+        if (
+            self.human_relevance == AccountTopicRelevance.RELEVANT
+            and self.human_specialization == SpecializationLevel.UNKNOWN
+        ):
+            raise ValueError("relevant completed reviews require a known specialization")
+        if (
+            self.human_relevance == AccountTopicRelevance.IRRELEVANT
+            and self.human_specialization in {SpecializationLevel.HIGH, SpecializationLevel.MEDIUM}
+        ):
+            raise ValueError("irrelevant accounts cannot have high or medium topic specialization")
+        return self
 
 
 class ScoreComponent(StrictModel):
