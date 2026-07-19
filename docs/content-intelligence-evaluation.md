@@ -2,7 +2,7 @@
 
 评测契约版本：`content-intelligence-eval.p0.3`
 
-冻结账号资格政策版本：`creator-qualification.p0.1`；v3 候选：`creator-qualification.p0.2`
+冻结账号资格政策版本：`creator-qualification.p0.1`；历史 v3 评测版本：`creator-qualification.p0.2`
 
 ## 为什么拆成三层
 
@@ -91,10 +91,16 @@ Gate 盲评工作簿隐藏 LLM 建议、系统分数、v1/v2 选择状态、qual
 
 完整性复核纠正了原判定：旧流程同时用 frozen qualified 改写 `product_relation`、通过 `preferred_mids` 改变 Top 5，又用同一标签计算 Precision，且只检查 strict Precision@5，因而 `with_reservation` 无效。纠正后的无偏 Gate 精确复现审核前系统输出，selected precision 20.69%、strict Precision@5 28.57%、不相关误判率 3.45%、unresolved selection rate 75.86%、输出覆盖 76.19%，状态为 `failed`。单独命名的 HITL 辅助输出为 42 个位置，诊断 selected precision 50.00%、strict Precision@5 100.00%、不相关误判率 0.00%，但它明确不是无偏质量 Gate。P0-D 继续阻塞。
 
-## P0-C v3 独立 truth mapping 与新 holdout
+## P0-C v3 独立 truth mapping、失败盲评与最终冻结
 
 `competitor-evaluation.p0.2` 把人工 truth 映射与系统 prediction、qualification 和 ranking 完全隔离。它只读取完整人工 `human_relevance` / `human_specialization` / `human_role`，以及独立客观 Evidence：已决投稿数、相关投稿数与比例、30/90 天持续性、粉丝/相关播放影响力和关键词类别。
 
 truth mapping 禁止读取 system/model confidence、系统 relevance/specialization/role、boundary risks、base score、qualification、selected 或 selection rank。人工 relevant + high specialization + core-eligible role 仍需至少 10 个已决投稿、5 个相关投稿、相关比例 ≥50%、90 天至少 3 个且 30 天至少 1 个相关投稿，并通过影响力；评测 core 的 50% 比例门槛故意低于系统资格的 60%，避免循环评测。
 
-53 项只用于 development/error analysis，并对 v2/v3 使用同一 p0.2 truth mapping。新盲评先排除这 53 项关系，再由冻结 v3 代码在 unseen pool 中生成；工作簿隐藏系统标签、分数、资格、选择状态、旧人工标签和 Gate 指标。最终 Gate 不重新运行选择器，只读取冻结 selected positions 和完成的盲评 truth；false-negative 只在抽样未选关系中报告，不包装为完整 Retrieval Recall。完整协议见 [P0-C v3](content-intelligence-p0c-v3.md)。
+53 项只用于 development/error analysis，并对 v2/v3 使用同一 p0.2 truth mapping。新盲评先排除这 53 项关系，再由冻结 v3 代码在 unseen pool 中生成；工作簿隐藏系统标签、分数、资格、选择状态、旧人工标签和 Gate 指标。最终 Gate 不重新运行选择器，只读取冻结 selected positions 和完成的盲评 truth；false-negative 只在抽样未选关系中报告，不包装为完整 Retrieval Recall。
+
+该新盲评已经完成：selected precision 为 57.14%、strict Precision@5 为 80.00%、不相关误判率为 14.29%，14/20 关键词零输出。selected precision 和不相关误判率未达到 Gate，输出覆盖也不足，因此 v3 状态为 `failed`。
+
+总控随后额外授权一次真正分层的架构实验。它只在合并后的 97 项 development set 上运行，没有生成第二轮 holdout：relevance exact 为 71.13%、specialization exact 为 55.67%、role exact 为 43.30%、qualification exact 为 43.30%；selected precision 69.23%、strict Precision@5 50.00%、不相关误判率 7.69%、output coverage 66.67%，selected count 为 13，14/20 关键词 abstain。relevance 和 role 的局部改善不能抵消 specialization、qualification、严格槽位精度和 coverage 的退化；这些 development 数值不是新 holdout 或最终线上指标。
+
+架构候选未冻结、未采用为运行时代码，也未推送 GitHub；失败源码只保存在本地归档分支和仓库外 Bundle。P0-C 正式冻结，P0-D、P0-E 均未开始。完整记录见 [P0-C v3](content-intelligence-p0c-v3.md)和[分层架构失败实验说明](content-intelligence-p0c-architecture-repair.md)。
