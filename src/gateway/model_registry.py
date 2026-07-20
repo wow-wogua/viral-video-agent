@@ -10,6 +10,10 @@ class ModelRegistry:
         self.MODELS[agent_name] = model_config
         print(f"[registry] registered: {agent_name} -> {model_config.get('model', 'unknown')}")
 
+    def unregister(self, agent_name: str) -> dict | None:
+        """移除单个 Agent 的注册，不影响其他 Agent。"""
+        return self.MODELS.pop(agent_name, None)
+
     def register_deepseek(self, agent_name: str, model: str = "deepseek-v4-pro"):
         """快捷注册 DeepSeek 模型。"""
         self.MODELS[agent_name] = {"provider": "deepseek", "model": model}

@@ -96,6 +96,8 @@ services:
       CHROMA_HOST: chromadb
       CHROMA_PORT: 8000
       MCP_SERVER_URL: http://mcp-server:8001/sse
+      USE_FINETUNED_MODEL: ${USE_FINETUNED_MODEL:-false}
+      FINETUNED_MODEL_URL: ${FINETUNED_MODEL_URL:-http://host.docker.internal:8002/v1}
       GRAPH_VERSION: ${GRAPH_VERSION:-v2}
       ENABLE_MOCK_TOOLS: ${ENABLE_MOCK_TOOLS:-false}
       WORKER_MAX_JOBS: ${WORKER_MAX_JOBS:-2}

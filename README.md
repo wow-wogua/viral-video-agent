@@ -144,6 +144,44 @@ DEEPSEEK_BASE_URL=https://api.deepseek.com
 DEEPSEEK_MODEL_ID=deepseek-v4-pro
 ```
 
+### Researcher 可选本地 v4.1 路径
+
+项目三的 Qwen3-4B v4.1 只作为 Researcher 的可选 OpenAI 兼容运行路径，默认关闭。FastAPI App 导入和 Arq Worker 启动都会调用同一个模型路由初始化函数；关闭开关时，该函数只移除 Researcher 的可选注册，不会清空其他 Agent 的合法注册。
+
+| 进程 / Agent | `USE_FINETUNED_MODEL=false` | `USE_FINETUNED_MODEL=true` |
+|---|---|---|
+| App | 不注册本地模型 | 注册 Researcher 路由，供与 Worker 一致的应用上下文使用 |
+| Worker / Researcher | DeepSeek V4 Pro | 项目三 `qwen3-tool-calling` OpenAI 兼容服务 |
+| Planner / Analyst / Writer | DeepSeek V4 Pro | 仍为 DeepSeek V4 Pro |
+| MiMo ASR | 独立配置，不受影响 | 独立配置，不受影响 |
+
+先在项目三只读仓库按其 README 启动现有 v4.1 Direct Adapter 服务：
+
+```powershell
+cd D:\internship\tool-calling-finetune
+$env:BASE_MODEL_PATH='<existing-qwen3-4b-path>'
+$env:FINETUNED_ADAPTER_PATH='outputs\qwen3_lora_tool_calling_v4_1'
+$env:RESEARCHER_PROMPT_VARIANT='contract'
+python scripts\serve_model.py
+```
+
+服务默认监听 `http://localhost:8002/v1`。Docker Compose 中的 App 和 Worker 都接收以下非秘密变量：
+
+```dotenv
+USE_FINETUNED_MODEL=true
+FINETUNED_MODEL_URL=http://host.docker.internal:8002/v1
+```
+
+修改开关后需要重建进程状态，不要求线上热切换：
+
+```powershell
+docker compose up -d --force-recreate app worker
+```
+
+回退时将 `USE_FINETUNED_MODEL=false`，再次重建 App 与 Worker。新进程中的 Researcher 会恢复默认 DeepSeek 路径；自动化测试也覆盖同一进程内 true→false 不残留注册。
+
+边界说明：项目三既有 3 条冻结任务 A/B 只证明只读图调用兼容；本节描述的是真实 Arq Worker 的可选运行时接入；两者都不等于生产部署、长期稳定性验证或默认模型决策变更。
+
 如需把 Agent LLM 切换为余额扣费 MiMo 公共 OpenAI 兼容接口：
 
 ```dotenv
@@ -230,7 +268,7 @@ cd ..
 docker compose config --quiet
 ```
 
-当前验收：56 条 Python 测试，其中包含 20 条冻结 B 站产品输入回归；完整记录见 [验收文档](docs/validation-20260713.md)。
+当前维护分支验收：62 条 Python 测试，其中包含 20 条冻结 B 站产品输入回归和 6 条可选 Researcher 路由测试；历史 MVP 记录见 [2026-07-13 验收文档](docs/validation-20260713.md)，Worker 接入记录见 [2026-07-20 验证文档](docs/researcher-finetuned-worker-integration-20260720.md)。
 
 ### 真实 API 冒烟（2026-07-13）
 

@@ -10,6 +10,7 @@ from src.config import ASR_MAX_VIDEOS, ASR_MAX_VIDEO_SECONDS, DEFAULT_LLM_MODEL_
 from src.db.models import EvidenceItem, Report, UsageRecord
 from src.db.session import async_session_factory
 from src.gateway.cost_tracker import cost_tracker
+from src.gateway.model_bootstrap import configure_optional_model_routes
 from src.agents.analyst import analyst_node
 from src.agents.writer import writer_node
 from src.graph.builder import build_graph
@@ -173,6 +174,7 @@ async def run_analysis_job(ctx: dict, job_id_value: str) -> None:
 
 
 async def startup(ctx: dict) -> None:
+    configure_optional_model_routes()
     ctx["provider_semaphore"] = asyncio.Semaphore(WORKER_MAX_JOBS)
 
 

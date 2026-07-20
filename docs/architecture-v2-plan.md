@@ -26,6 +26,20 @@
 - 凭证边界：Token Plan 虽包含 ASR 模型和独立 `/v1` 地址，但供应商页面禁止用于自动化脚本或应用后端；Worker 只接受明确允许应用后端使用的 ASR 凭证。
 - Analyst/Writer：要求可解析文本输出，结构化 JSON 节点关闭 thinking；两者输出预算为 2048 token。Evidence 已存在但 claims 为空时禁止发布。
 
+## Researcher 可选模型路由
+
+项目三 Qwen3-4B v4.1 通过本地 OpenAI 兼容服务接入时，只覆盖 `researcher`：
+
+1. `src.gateway.model_bootstrap.configure_optional_model_routes()` 在 FastAPI App 导入和 Arq Worker startup 中复用。
+2. `USE_FINETUNED_MODEL=false` 是默认值；初始化会精确注销 Researcher 的可选覆盖，其他 Agent 注册不受影响。
+3. `USE_FINETUNED_MODEL=true` 时注册 `provider=openai`、`model=qwen3-tool-calling` 和 `FINETUNED_MODEL_URL`。
+4. LangGraph 可以在 Worker 导入时构建，因为 Researcher 节点执行时才动态调用 `get_llm("researcher")`；Worker startup 完成注册后，真实任务会读取当前 Registry。
+5. Planner、Analyst、Writer 继续使用默认 DeepSeek V4 Pro；MiMo ASR 使用独立客户端和配置。
+
+Docker Compose 必须同时向 `app` 和 `worker` 传入 `USE_FINETUNED_MODEL` 与 `FINETUNED_MODEL_URL`。开关变更通过新进程生效，不承诺线上热切换。
+
+证据边界：离线冻结评测回答模型层候选价值，项目三只读 A/B 回答 Prompt/Schema/图兼容性，Arq Worker canary 回答后台运行路径是否实际路由到本地服务；这些证据均不等同生产部署、长期稳定性或默认模型切换。
+
 ## 分阶段实施
 
 ### Phase 1：能力和数据契约（已完成）
