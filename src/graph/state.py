@@ -7,6 +7,7 @@ class AgentState(TypedDict, total=False):
     user_id: str
     user_request: str
     platforms: list[str]
+    topic_spec: dict
     workflow_version: str
     next_agent: str
     task_complete: bool

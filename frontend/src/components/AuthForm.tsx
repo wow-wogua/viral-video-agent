@@ -29,7 +29,9 @@ export function AuthForm({ mode }: { mode: 'login' | 'register' }) {
     try {
       if (mode === 'register') await register(email, password);
       else await login(email, password);
-      router.replace('/dashboard');
+      const requestedNext = new URLSearchParams(window.location.search).get('next');
+      const nextPath = requestedNext?.startsWith('/') && !requestedNext.startsWith('//') ? requestedNext : '/dashboard';
+      router.replace(nextPath);
     } catch (err) {
       setError(readableError(err));
     } finally {

@@ -47,6 +47,7 @@ services:
       CHROMA_PORT: 8000
       HF_ENDPOINT: https://hf-mirror.com
       ENABLE_MOCK_TOOLS: ${ENABLE_MOCK_TOOLS:-false}
+      ENABLE_INTERACTIVE_BRIEF: ${ENABLE_INTERACTIVE_BRIEF:-false}
     depends_on:
       - chromadb
     volumes:
@@ -71,6 +72,7 @@ services:
       FINETUNED_MODEL_URL: ${FINETUNED_MODEL_URL:-http://host.docker.internal:8002/v1}
       GRAPH_VERSION: ${GRAPH_VERSION:-v2}
       ENABLE_MOCK_TOOLS: ${ENABLE_MOCK_TOOLS:-false}
+      ENABLE_INTERACTIVE_BRIEF: ${ENABLE_INTERACTIVE_BRIEF:-false}
     depends_on:
       postgres:
         condition: service_healthy

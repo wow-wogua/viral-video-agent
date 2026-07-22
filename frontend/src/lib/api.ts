@@ -1,9 +1,12 @@
-export type JobStatus = 'pending' | 'running' | 'completed' | 'partial' | 'failed' | 'cancelled';
+export type JobStatus = 'pending' | 'running' | 'waiting_user' | 'completed' | 'partial' | 'failed' | 'cancelled';
 export type AnalysisMode = 'standard' | 'deep';
 
 export interface User { id: string; email: string; created_at: string; is_active: boolean; }
 export interface JobEvent { event_type: string; message: string; progress: number; level: 'info' | 'warning' | 'error'; created_at: string; }
-export interface Job { id: string; query: string; platforms: string[]; analysis_mode: AnalysisMode; status: JobStatus; progress: number; error_code?: string | null; error_message?: string | null; report_id?: string | null; created_at: string; started_at?: string | null; completed_at?: string | null; events?: JobEvent[]; }
+export interface ClarificationOption { id: string; label: string; description: string; }
+export interface ClarificationRequest { request_id: string; round: number; question: string; options: ClarificationOption[]; allow_custom: boolean; status: 'pending' | 'answered'; }
+export interface ClarificationState { job_id: string; max_rounds: number; current: ClarificationRequest | null; history: ClarificationRequest[]; }
+export interface Job { id: string; query: string; platforms: string[]; analysis_mode: AnalysisMode; status: JobStatus; progress: number; clarification_round: number; execution_version: number; topic_spec?: Record<string, unknown> | null; interaction_usage?: Record<string, unknown>; error_code?: string | null; error_message?: string | null; report_id?: string | null; created_at: string; started_at?: string | null; completed_at?: string | null; events?: JobEvent[]; }
 export interface Claim { claim: string; claim_type: 'observation' | 'inference' | 'recommendation'; evidence_ids: string[]; confidence: number; }
 export interface EvidenceItem { evidence_id: string; tool: string; source_type: string; title: string; source_url?: string | null; platform: string; fetched_at: string; raw_data?: Record<string, unknown>; summary?: string | null; data_fields?: Record<string, unknown>; transcript_segment?: Record<string, unknown> | null; }
 export interface Report { id: string; job_id: string; title: string; content: string; structured_claims: Claim[]; status: JobStatus; model_info: Record<string, unknown>; evidence: EvidenceItem[]; usage?: UsageRecord | null; created_at: string; updated_at: string; }
@@ -31,6 +34,8 @@ export const getJob = (id: string) => request<Job>(`/jobs/${id}`);
 export const cancelJob = (id: string) => request<Job>(`/jobs/${id}/cancel`, { method: 'POST' });
 export const retryJob = (id: string) => request<Job>(`/jobs/${id}/retry`, { method: 'POST' });
 export const getJobEvents = (id: string) => request<{ items: JobEvent[] }>(`/jobs/${id}/events`);
+export const getJobClarification = (id: string) => request<ClarificationState>(`/jobs/${id}/clarification`);
+export const answerJobClarification = (id: string, data: { request_id: string; selected_option_id?: string; custom_answer?: string }) => request<Job>(`/jobs/${id}/clarification`, { method: 'POST', body: JSON.stringify(data) });
 export const getReport = (id: string) => request<Report>(`/reports/${id}`);
 export const deleteJob = (id: string) => request<void>(`/jobs/${id}`, { method: 'DELETE' });
 export const getUsage = () => request<UsageSummary>('/usage');

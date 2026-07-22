@@ -207,6 +207,10 @@ ASR_MAX_VIDEOS=5
 
 ## 后台任务 API
 
+### 交互式竞争情报 vNext-A（默认关闭）
+
+`ENABLE_INTERACTIVE_BRIEF=false`（App 与 Worker 一致）时，现有 Job 行为保持不变。开启后，模糊需求会先生成最多两轮澄清，任务进入 `waiting_user`；用户可在 Job 页用极简表单回答，随后恢复同一 Job 并把 TopicSpec 传入现有 LangGraph。该路线不重新打开冻结的 P0-C，也不包含候选账号确认或新 UI 框架；首页仅保留原有进入结构并精简文案。详见 [vNext-A 设计](docs/interactive-intelligence-vnext.md) 与 [2026-07-22 验证记录](docs/interactive-intelligence-vnext-a-validation-20260722.md)。P0-C 质量 Gate 仍失败并冻结，P0-D/P0-E 未开始。
+
 ```text
 POST   /jobs
 GET    /jobs
@@ -214,6 +218,8 @@ GET    /jobs/{job_id}
 POST   /jobs/{job_id}/cancel
 POST   /jobs/{job_id}/retry
 GET    /jobs/{job_id}/events
+GET    /jobs/{job_id}/clarification
+POST   /jobs/{job_id}/clarification
 GET    /reports/{report_id}
 POST   /reports/{report_id}/shares
 POST   /reports/{report_id}/feedback
@@ -269,7 +275,7 @@ cd ..
 docker compose config --quiet
 ```
 
-当前 `main`：62 条 Python 测试，其中包含 20 条冻结 B 站产品输入回归和 6 条可选 Researcher 路由测试；历史 MVP 记录见 [2026-07-13 验收文档](docs/validation-20260713.md)，Worker 接入记录见 [2026-07-20 验证文档](docs/researcher-finetuned-worker-integration-20260720.md)。
+当前 vNext-A 分支：72 条 Python 测试，其中新增 10 条交互式澄清闭环测试，并保留冻结 B 站产品输入与可选 Researcher 路由回归；历史 MVP 记录见 [2026-07-13 验收文档](docs/validation-20260713.md)，Worker 接入记录见 [2026-07-20 验证文档](docs/researcher-finetuned-worker-integration-20260720.md)。
 
 ### 真实 API 冒烟（2026-07-13）
 

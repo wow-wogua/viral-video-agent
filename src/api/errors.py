@@ -34,4 +34,8 @@ ERROR_MESSAGES = {
     "EVIDENCE_INSUFFICIENT": "当前样本不足以支持完整结论。",
     "REPORT_VALIDATION_FAILED": "报告引用校验失败，未发布未经支持的结论。",
     "WORKER_FAILED": "后台任务执行失败，请重试。",
+    "JOB_NOT_RETRYABLE": "当前任务状态不能重试。",
+    "CLARIFICATION_NOT_FOUND": "当前任务没有待回答的澄清问题。",
+    "CLARIFICATION_CONFLICT": "该澄清请求已经用不同答案提交。",
+    "CLARIFICATION_INVALID": "澄清回答无效或已过期。",
 }

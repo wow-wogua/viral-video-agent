@@ -64,6 +64,7 @@ WORKER_MAX_JOBS: int = int(os.getenv("WORKER_MAX_JOBS", "2"))
 USER_MONTHLY_JOB_LIMIT: int = int(os.getenv("USER_MONTHLY_JOB_LIMIT", "30"))
 MCP_SERVER_URL: str = os.getenv("MCP_SERVER_URL", "http://127.0.0.1:8001/sse")
 ENABLE_MOCK_TOOLS: bool = os.getenv("ENABLE_MOCK_TOOLS", "false").lower() == "true"
+ENABLE_INTERACTIVE_BRIEF: bool = os.getenv("ENABLE_INTERACTIVE_BRIEF", "false").lower() == "true"
 
 if APP_ENV == "production" and JWT_SECRET == "dev-only-change-me-at-least-32-bytes":
     raise RuntimeError("JWT_SECRET must be configured in production")

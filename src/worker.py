@@ -6,7 +6,8 @@ from arq import Retry
 from arq.connections import RedisSettings
 
 from src.api.errors import ERROR_MESSAGES
-from src.config import ASR_MAX_VIDEOS, ASR_MAX_VIDEO_SECONDS, DEFAULT_LLM_MODEL_ID, DEFAULT_LLM_PROVIDER, JOB_MAX_RETRIES, JOB_TIMEOUT_SECONDS, REDIS_URL, WORKER_MAX_JOBS
+from src.briefing.service import validate_job_brief
+from src.config import ASR_MAX_VIDEOS, ASR_MAX_VIDEO_SECONDS, DEFAULT_LLM_MODEL_ID, DEFAULT_LLM_PROVIDER, ENABLE_INTERACTIVE_BRIEF, JOB_MAX_RETRIES, JOB_TIMEOUT_SECONDS, REDIS_URL, WORKER_MAX_JOBS
 from src.db.models import EvidenceItem, Report, UsageRecord
 from src.db.session import async_session_factory
 from src.gateway.cost_tracker import cost_tracker
@@ -52,8 +53,8 @@ async def _event(job_id: uuid.UUID, event_type: str, message: str, progress: int
         await redis.expire(f"job:{job_id}:events", 86400)
 
 
-async def _invoke_graph(job_id: uuid.UUID, user_id: uuid.UUID, query: str, platforms: list[str]) -> dict:
-    task = asyncio.create_task(graph.ainvoke({"user_id": str(user_id), "user_request": query, "platforms": platforms, "task_complete": False, "data_sufficient": False, "analysis_confidence": 0.0, "report_final": ""}, config={"configurable": {"thread_id": str(job_id)}}))
+async def _invoke_graph(job_id: uuid.UUID, user_id: uuid.UUID, query: str, platforms: list[str], topic_spec: dict | None = None, execution_version: int = 0) -> dict:
+    task = asyncio.create_task(graph.ainvoke({"user_id": str(user_id), "user_request": query, "platforms": platforms, "topic_spec": topic_spec or {}, "task_complete": False, "data_sufficient": False, "analysis_confidence": 0.0, "report_final": ""}, config={"configurable": {"thread_id": f"{job_id}:{execution_version}"}}))
     while not task.done():
         await asyncio.sleep(1.5)
         async with async_session_factory() as db:
@@ -124,7 +125,8 @@ async def _persist_result(job_id: uuid.UUID, result: dict) -> uuid.UUID:
         await db.flush()
         for item in evidence:
             db.add(EvidenceItem(report_id=report.id, job_id=job.id, evidence_id=item["evidence_id"], tool=item.get("tool", "unknown"), source_type=item.get("source_type", "tool_result"), title=item.get("title", "Evidence"), source_url=item.get("source_url"), platform=item.get("platform", "bilibili"), fetched_at=datetime.fromisoformat(item["fetched_at"]), raw_data=item.get("raw_data", {}), summary=item.get("summary"), data_fields=item.get("data_fields", {}), transcript_segment=item.get("transcript_segment")))
-        db.add(UsageRecord(user_id=job.user_id, job_id=job.id, input_tokens=cost["input_tokens"], output_tokens=cost["output_tokens"], estimated_cost=cost["total_cost"], asr_seconds=float(result.get("asr_seconds", 0))))
+        interaction_usage = job.interaction_usage or {}
+        db.add(UsageRecord(user_id=job.user_id, job_id=job.id, input_tokens=cost["input_tokens"] + int(interaction_usage.get("input_tokens", 0)), output_tokens=cost["output_tokens"] + int(interaction_usage.get("output_tokens", 0)), estimated_cost=round(cost["total_cost"] + float(interaction_usage.get("estimated_cost", 0.0)), 6), asr_seconds=float(result.get("asr_seconds", 0))))
         job.status, job.progress, job.completed_at = status, 100, datetime.now(timezone.utc)
         if status == "partial":
             job.error_code, job.error_message = "EVIDENCE_INSUFFICIENT", ERROR_MESSAGES["EVIDENCE_INSUFFICIENT"]
@@ -132,20 +134,28 @@ async def _persist_result(job_id: uuid.UUID, result: dict) -> uuid.UUID:
         return report.id
 
 
-async def run_analysis_job(ctx: dict, job_id_value: str) -> None:
+async def run_analysis_job(ctx: dict, job_id_value: str, execution_version_value: int | None = None) -> None:
     job_id = uuid.UUID(job_id_value)
     redis = ctx.get("redis")
     async with async_session_factory() as db:
         repo = JobRepository(db); job = await repo.get(job_id)
-        if not job or job.status == "cancelled": return
+        if not job or job.status != "pending": return
+        if execution_version_value is not None and job.execution_version != int(execution_version_value): return
         job.status, job.started_at, job.error_code, job.error_message = "running", datetime.now(timezone.utc), None, None
         await repo.save(job)
-        user_id, query, platforms, retry_count, analysis_mode = job.user_id, job.query, job.platforms, job.retry_count, job.analysis_mode
+        user_id, query, platforms, retry_count, analysis_mode, execution_version = job.user_id, job.query, job.platforms, job.retry_count, job.analysis_mode, job.execution_version
     cost_tracker.reset(); fallback_counter.reset(); trace_tracker.reset()
     try:
+        topic_spec = None
+        if ENABLE_INTERACTIVE_BRIEF:
+            brief_result = await validate_job_brief(job_id)
+            if not brief_result.ready:
+                return
+            topic_spec = brief_result.topic_spec.model_dump(mode="json") if brief_result.topic_spec else None
+            cost_tracker.reset()
         await _event(job_id, "collecting", "正在采集B站数据并检索知识库。", 15, redis=redis)
         async with ctx["provider_semaphore"]:
-            result = await asyncio.wait_for(_invoke_graph(job_id, user_id, query, platforms), timeout=JOB_TIMEOUT_SECONDS)
+            result = await asyncio.wait_for(_invoke_graph(job_id, user_id, query, platforms, topic_spec, execution_version), timeout=JOB_TIMEOUT_SECONDS)
             if analysis_mode == "deep":
                 result = await _enrich_deep_analysis(result, job_id, redis)
         await _event(job_id, "validating", "正在校验 Evidence 与结构化结论。", 78, redis=redis)

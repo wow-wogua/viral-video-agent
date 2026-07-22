@@ -134,6 +134,10 @@ async def planner_v2_node(state: AgentState) -> dict:
         user_request=user_request,
         platforms=platforms,
     )
+    if state.get("topic_spec"):
+        prompt += "\n\n已确认的结构化研究范围 TopicSpec：\n" + json.dumps(
+            state["topic_spec"], ensure_ascii=False, sort_keys=True
+        )
     response = await get_llm().ainvoke([HumanMessage(content=prompt)])
     parsed = _parse_json_object(extract_text(response))
     tasks = []

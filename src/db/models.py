@@ -13,8 +13,9 @@ def utcnow() -> datetime:
 
 class User(Base):
     __tablename__ = "users"
+    __table_args__ = (UniqueConstraint("email"),)
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
-    email: Mapped[str] = mapped_column(String(320), unique=True, index=True)
+    email: Mapped[str] = mapped_column(String(320), index=True)
     hashed_password: Mapped[str] = mapped_column(String(255))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
@@ -34,6 +35,10 @@ class AnalysisJob(Base):
     status: Mapped[str] = mapped_column(String(20), default="pending", index=True)
     progress: Mapped[int] = mapped_column(Integer, default=0)
     retry_count: Mapped[int] = mapped_column(Integer, default=0)
+    clarification_round: Mapped[int] = mapped_column(Integer, default=0)
+    execution_version: Mapped[int] = mapped_column(Integer, default=0)
+    topic_spec: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    interaction_usage: Mapped[dict] = mapped_column(JSON, default=dict)
     idempotency_key: Mapped[str] = mapped_column(String(128))
     arq_job_id: Mapped[str | None] = mapped_column(String(180), nullable=True)
     error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
@@ -44,6 +49,7 @@ class AnalysisJob(Base):
     cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     reports: Mapped[list["Report"]] = relationship(back_populates="job", cascade="all, delete-orphan")
     evidence_items: Mapped[list["EvidenceItem"]] = relationship(back_populates="job", cascade="all, delete-orphan")
+    clarifications: Mapped[list["JobClarification"]] = relationship(back_populates="job", cascade="all, delete-orphan")
 
     @property
     def report_id(self) -> uuid.UUID | None:
@@ -114,10 +120,11 @@ class UsageRecord(Base):
 
 class ShareLink(Base):
     __tablename__ = "share_links"
+    __table_args__ = (UniqueConstraint("token_hash"),)
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     report_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("reports.id", ondelete="CASCADE"), index=True)
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
-    token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    token_hash: Mapped[str] = mapped_column(String(64), index=True)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
@@ -131,3 +138,26 @@ class JobEvent(Base):
     progress: Mapped[int] = mapped_column(Integer)
     level: Mapped[str] = mapped_column(String(20), default="info")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class JobClarification(Base):
+    __tablename__ = "job_clarifications"
+    __table_args__ = (
+        UniqueConstraint("request_id", name="uq_job_clarifications_request_id"),
+        UniqueConstraint("job_id", "round", name="uq_job_clarifications_job_round"),
+        Index("ix_job_clarifications_job_id", "job_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    request_id: Mapped[uuid.UUID] = mapped_column(Uuid, default=uuid.uuid4)
+    job_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("analysis_jobs.id", ondelete="CASCADE"), nullable=False)
+    round: Mapped[int] = mapped_column(Integer, nullable=False)
+    question: Mapped[str] = mapped_column(String(500), nullable=False)
+    options: Mapped[list[dict]] = mapped_column(JSON, nullable=False)
+    allow_custom: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    status: Mapped[str] = mapped_column(String(20), default="pending", nullable=False, index=True)
+    selected_option_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    custom_answer: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    answered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    job: Mapped[AnalysisJob] = relationship(back_populates="clarifications")

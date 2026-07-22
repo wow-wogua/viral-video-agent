@@ -5,7 +5,7 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from src.db.models import AnalysisJob, EvidenceItem, JobEvent, Report, ReportFeedback, ShareLink, UsageRecord, User
+from src.db.models import AnalysisJob, EvidenceItem, JobClarification, JobEvent, Report, ReportFeedback, ShareLink, UsageRecord, User
 
 
 class UserRepository:
@@ -19,7 +19,9 @@ class UserRepository:
 class JobRepository:
     def __init__(self, db: AsyncSession): self.db = db
     async def get_owned(self, job_id: uuid.UUID, user_id: uuid.UUID) -> AnalysisJob | None:
-        return await self.db.scalar(select(AnalysisJob).options(selectinload(AnalysisJob.reports)).where(AnalysisJob.id == job_id, AnalysisJob.user_id == user_id))
+        return await self.db.scalar(select(AnalysisJob).options(selectinload(AnalysisJob.reports), selectinload(AnalysisJob.clarifications)).where(AnalysisJob.id == job_id, AnalysisJob.user_id == user_id))
+    async def get_owned_for_update(self, job_id: uuid.UUID, user_id: uuid.UUID) -> AnalysisJob | None:
+        return await self.db.scalar(select(AnalysisJob).options(selectinload(AnalysisJob.reports), selectinload(AnalysisJob.clarifications)).where(AnalysisJob.id == job_id, AnalysisJob.user_id == user_id).with_for_update())
     async def get(self, job_id: uuid.UUID) -> AnalysisJob | None: return await self.db.get(AnalysisJob, job_id)
     async def get_by_idempotency(self, user_id: uuid.UUID, key: str) -> AnalysisJob | None:
         return await self.db.scalar(select(AnalysisJob).options(selectinload(AnalysisJob.reports)).where(AnalysisJob.user_id == user_id, AnalysisJob.idempotency_key == key))
@@ -45,6 +47,14 @@ class JobRepository:
     async def add_event(self, job_id: uuid.UUID, event_type: str, message: str, progress: int, level: str = "info") -> JobEvent:
         event = JobEvent(job_id=job_id, event_type=event_type, message=message, progress=progress, level=level); self.db.add(event); await self.db.commit(); return event
     async def events(self, job_id: uuid.UUID) -> list[JobEvent]: return list((await self.db.scalars(select(JobEvent).where(JobEvent.job_id == job_id).order_by(JobEvent.created_at))).all())
+    async def clarifications(self, job_id: uuid.UUID) -> list[JobClarification]:
+        return list((await self.db.scalars(select(JobClarification).where(JobClarification.job_id == job_id).order_by(JobClarification.round))).all())
+    async def clarification_by_request(self, job_id: uuid.UUID, request_id: uuid.UUID) -> JobClarification | None:
+        return await self.db.scalar(select(JobClarification).where(JobClarification.job_id == job_id, JobClarification.request_id == request_id))
+    async def clarification_by_request_for_update(self, job_id: uuid.UUID, request_id: uuid.UUID) -> JobClarification | None:
+        return await self.db.scalar(select(JobClarification).where(JobClarification.job_id == job_id, JobClarification.request_id == request_id).with_for_update())
+    async def pending_clarification(self, job_id: uuid.UUID) -> JobClarification | None:
+        return await self.db.scalar(select(JobClarification).where(JobClarification.job_id == job_id, JobClarification.status == "pending").order_by(JobClarification.round.desc()))
 
 
 class ReportRepository:

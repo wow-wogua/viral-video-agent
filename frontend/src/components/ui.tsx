@@ -88,6 +88,7 @@ export function Card({ className, ...props }: React.HTMLAttributes<HTMLDivElemen
 const statusStyles: Record<string, string> = {
   pending: 'border-foreground/20 bg-muted text-foreground',
   running: 'border-info/30 bg-info/10 text-info',
+  waiting_user: 'border-warning/50 bg-warning/20 text-warning-foreground dark:text-warning',
   completed: 'border-success/30 bg-success/10 text-success',
   partial: 'border-warning/50 bg-warning/20 text-warning-foreground dark:text-warning',
   failed: 'border-destructive/30 bg-destructive/10 text-destructive',
@@ -96,6 +97,7 @@ const statusStyles: Record<string, string> = {
 const statusDots: Record<string, string> = {
   pending: 'bg-muted-foreground',
   running: 'bg-info',
+  waiting_user: 'bg-warning',
   completed: 'bg-success',
   partial: 'bg-warning',
   failed: 'bg-destructive',
@@ -104,6 +106,7 @@ const statusDots: Record<string, string> = {
 const statusLabels: Record<string, string> = {
   pending: '排队中',
   running: '分析中',
+  waiting_user: '待补充',
   completed: '已完成',
   partial: '部分完成',
   failed: '失败',
