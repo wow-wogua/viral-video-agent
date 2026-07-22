@@ -269,7 +269,7 @@ cd ..
 docker compose config --quiet
 ```
 
-当前维护分支验收：62 条 Python 测试，其中包含 20 条冻结 B 站产品输入回归和 6 条可选 Researcher 路由测试；历史 MVP 记录见 [2026-07-13 验收文档](docs/validation-20260713.md)，Worker 接入记录见 [2026-07-20 验证文档](docs/researcher-finetuned-worker-integration-20260720.md)。
+当前 `main`：62 条 Python 测试，其中包含 20 条冻结 B 站产品输入回归和 6 条可选 Researcher 路由测试；历史 MVP 记录见 [2026-07-13 验收文档](docs/validation-20260713.md)，Worker 接入记录见 [2026-07-20 验证文档](docs/researcher-finetuned-worker-integration-20260720.md)。
 
 ### 真实 API 冒烟（2026-07-13）
 

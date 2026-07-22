@@ -2,7 +2,7 @@
 
 ## Gate 结论
 
-本维护分支完成项目三 Qwen3-4B v4.1 到项目二真实 Arq Worker 的可选 Researcher 路由接入。默认开关仍为关闭；显式启用时只覆盖 Researcher，Planner、Analyst、Writer 的默认 DeepSeek V4 Pro 路由不变。验证停在 **Researcher Worker Integration Gate Review**，未合并 `main`。
+本维护分支完成项目三 Qwen3-4B v4.1 到项目二真实 Arq Worker 的可选 Researcher 路由接入。默认开关仍为关闭；显式启用时只覆盖 Researcher，Planner、Analyst、Writer 的默认 DeepSeek V4 Pro 路由不变。该接入已通过总控复核，并以 fast-forward 方式进入 `main`。
 
 这不是生产部署、默认模型切换或长期稳定性证明。
 
