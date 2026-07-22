@@ -21,6 +21,7 @@
 
 - 新增 `src.gateway.model_bootstrap.configure_optional_model_routes()`，由 App 导入和 Arq Worker startup 共用。
 - `USE_FINETUNED_MODEL=true` 时只注册 `researcher`：`provider=openai`、`model=qwen3-tool-calling`、`base_url=FINETUNED_MODEL_URL`。
+- `qwen3-tool-calling` 只是 OpenAI 兼容服务模型 ID；实际加载的是 Qwen3-4B 基座与 v4.1 Direct Adapter，不是另一个模型版本。
 - 开关关闭时只注销 Researcher 覆盖，不清空 Registry，不影响其他 Agent 注册。
 - Worker 在 startup 中初始化；图可以提前构建，因为节点执行时才动态调用 `get_llm("researcher")`。
 - Compose 同时向 App 和 Worker 传入 `USE_FINETUNED_MODEL` 与 `FINETUNED_MODEL_URL`。
@@ -84,9 +85,11 @@ Compose 启动时发现已有持久卷数据库记录了 P0 分支 revision `202
 - 删除本轮 `__pycache__`、`.pytest_cache` 和临时原始模型日志；未修改 `.venv`。
 - 保留脱敏仓库外证据、独立 canary 数据库和 Docker 卷；未使用 `git clean -fdx`、`docker compose down -v` 或 `docker system prune`。
 
-仓库外证据：
+仓库外私有证据仅记录索引，不公开本机路径或正文：
 
-`D:\internship\项目三-项目二Researcher正式接入验证\20260720-222851-worker-integration`
+- round：`20260720-222851-worker-integration`
+- 摘要文件：`worker-canary-summary.json`
+- SHA-256：`2F6F368158802E85C84391333C5224E259E5BD22B5DCFF5F926F6D97C466FF26`
 
 ## 调用与真实性边界
 

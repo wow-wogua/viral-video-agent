@@ -151,19 +151,20 @@ DEEPSEEK_MODEL_ID=deepseek-v4-pro
 | 进程 / Agent | `USE_FINETUNED_MODEL=false` | `USE_FINETUNED_MODEL=true` |
 |---|---|---|
 | App | 不注册本地模型 | 注册 Researcher 路由，供与 Worker 一致的应用上下文使用 |
-| Worker / Researcher | DeepSeek V4 Pro | 项目三 `qwen3-tool-calling` OpenAI 兼容服务 |
+| Worker / Researcher | DeepSeek V4 Pro | 项目三 Qwen3-4B + v4.1 Direct Adapter（OpenAI 兼容服务模型 ID：`qwen3-tool-calling`） |
 | Planner / Analyst / Writer | DeepSeek V4 Pro | 仍为 DeepSeek V4 Pro |
 | MiMo ASR | 独立配置，不受影响 | 独立配置，不受影响 |
 
-先在项目三只读仓库按其 README 启动现有 v4.1 Direct Adapter 服务：
+先进入 `tool-calling-finetune` 仓库根目录，再按其 README 启动现有 v4.1 Direct Adapter 服务：
 
 ```powershell
-cd D:\internship\tool-calling-finetune
 $env:BASE_MODEL_PATH='<existing-qwen3-4b-path>'
 $env:FINETUNED_ADAPTER_PATH='outputs\qwen3_lora_tool_calling_v4_1'
 $env:RESEARCHER_PROMPT_VARIANT='contract'
 python scripts\serve_model.py
 ```
+
+`qwen3-tool-calling` 只是 OpenAI 兼容服务暴露的模型 ID；服务实际加载的是 Qwen3-4B 基座与 v4.1 Direct Adapter，不代表另一个模型版本。
 
 服务默认监听 `http://localhost:8002/v1`。Docker Compose 中的 App 和 Worker 都接收以下非秘密变量：
 
