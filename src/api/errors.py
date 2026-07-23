@@ -38,4 +38,7 @@ ERROR_MESSAGES = {
     "CLARIFICATION_NOT_FOUND": "当前任务没有待回答的澄清问题。",
     "CLARIFICATION_CONFLICT": "该澄清请求已经用不同答案提交。",
     "CLARIFICATION_INVALID": "澄清回答无效或已过期。",
+    "JOB_REVISION_INVALID": "当前任务仍在执行，请先取消后再修改研究范围。",
+    "JOB_REVISION_CONFLICT": "该修订请求与已存在的任务不一致。",
+    "JOB_HAS_REVISIONS": "该任务已有修订记录，不能删除审计来源。",
 }

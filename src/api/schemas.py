@@ -34,6 +34,11 @@ class JobCreate(BaseModel):
         return value
 
 
+class JobRevisionCreate(BaseModel):
+    query: str = Field(min_length=3, max_length=2000)
+    idempotency_key: str = Field(min_length=8, max_length=128)
+
+
 class JobEventRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     event_type: str
@@ -54,6 +59,7 @@ class JobRead(BaseModel):
     retry_count: int
     clarification_round: int
     execution_version: int
+    revision_of_job_id: uuid.UUID | None = None
     topic_spec: TopicSpec | None = None
     interaction_usage: dict = Field(default_factory=dict)
     error_code: str | None

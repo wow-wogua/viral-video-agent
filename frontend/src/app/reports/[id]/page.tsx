@@ -2,13 +2,13 @@
 
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { ArrowLeft, Copy, Download, ListChecks, Printer } from 'lucide-react';
+import { ArrowLeft, Copy, Download, ListChecks, PencilLine, Printer } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { AppShell } from '@/components/AppShell';
 import { EvidenceCard, FeedbackForm, ReportClaim, ShareDialog } from '@/components/product';
-import { Button, Card, ErrorState, LoadingState, StatusBadge, Toast } from '@/components/ui';
+import { Button, Card, ErrorState, LinkButton, LoadingState, StatusBadge, Toast } from '@/components/ui';
 import { getReport, readableError, type Report } from '@/lib/api';
 
 type TraceAgent = { agent: string; duration_s: number; llm_calls: number };
@@ -49,7 +49,7 @@ export default function ReportPage() {
           <Link href="/history" className="inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"><ArrowLeft className="h-4 w-4" aria-hidden="true" />返回历史</Link>
           <div className="mt-3 flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
             <div className="min-w-0"><div className="flex flex-wrap items-center gap-3"><StatusBadge status={report.status} /><span className="font-mono text-[11px] tabular-nums text-muted-foreground">{new Date(report.created_at).toLocaleString('zh-CN')}</span></div><p className="eyebrow mt-4">Verified report / {report.id.slice(0, 6)}</p><h1 className="break-content title-balance mt-2 max-w-4xl text-3xl font-black tracking-[-.045em] sm:text-4xl">{report.title}</h1></div>
-            <div className="flex flex-wrap gap-2"><Button variant="secondary" size="sm" onClick={copy}><Copy className="h-3.5 w-3.5" aria-hidden="true" />复制</Button><Button variant="secondary" size="sm" onClick={exportMarkdown}><Download className="h-3.5 w-3.5" aria-hidden="true" />Markdown</Button><Button variant="secondary" size="sm" onClick={() => window.print()}><Printer className="h-3.5 w-3.5" aria-hidden="true" />PDF</Button><ShareDialog reportId={report.id} /></div>
+            <div className="flex flex-wrap gap-2"><LinkButton href={`/jobs/${report.job_id}?revise=1`} variant="secondary" size="sm"><PencilLine className="h-3.5 w-3.5" aria-hidden="true" />修改范围</LinkButton><Button variant="secondary" size="sm" onClick={copy}><Copy className="h-3.5 w-3.5" aria-hidden="true" />复制</Button><Button variant="secondary" size="sm" onClick={exportMarkdown}><Download className="h-3.5 w-3.5" aria-hidden="true" />Markdown</Button><Button variant="secondary" size="sm" onClick={() => window.print()}><Printer className="h-3.5 w-3.5" aria-hidden="true" />PDF</Button><ShareDialog reportId={report.id} /></div>
           </div>
         </div>
 

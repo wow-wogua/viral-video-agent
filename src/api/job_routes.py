@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import set_committed_value
 
 from src.api.errors import AppError, ERROR_MESSAGES
-from src.api.schemas import JobCreate, JobEventRead, JobRead
+from src.api.schemas import JobCreate, JobEventRead, JobRead, JobRevisionCreate
 from src.auth.dependencies import get_current_user
 from src.briefing.schemas import ClarificationAnswer, ClarificationRead
 from src.config import USER_MONTHLY_JOB_LIMIT
@@ -25,6 +25,7 @@ async def _mark_enqueue_failed(db: AsyncSession, job_id: uuid.UUID, execution_ve
         job.status = "failed"
         job.error_code = "WORKER_FAILED"
         job.error_message = ERROR_MESSAGES["WORKER_FAILED"]
+        job.dispatch_pending_at = None
         db.add(JobEvent(job_id=job.id, event_type="failed", message=job.error_message, progress=job.progress, level="error"))
         await db.commit()
         return
@@ -40,8 +41,9 @@ async def _enqueue_committed_job(db: AsyncSession, queue: JobQueue, job_id: uuid
 
     repo = JobRepository(db)
     job = await repo.get_for_update(job_id)
-    if job and job.execution_version == execution_version:
+    if job and job.execution_version == execution_version and job.status == "pending":
         job.arq_job_id = arq_job_id
+        job.dispatch_pending_at = None
         await db.commit()
         return job
     await db.rollback()
@@ -69,17 +71,22 @@ async def create_job(payload: JobCreate, user: User = Depends(get_current_user),
     usage = await ReportRepository(db).usage_summary(user.id, since)
     if usage["jobs_used"] >= USER_MONTHLY_JOB_LIMIT:
         raise AppError(429, "USAGE_LIMIT_REACHED", "本月公开测试用量已用完。")
-    job = await repo.create(user_id=user.id, query=payload.query, platforms=payload.platforms, analysis_mode=payload.analysis_mode, idempotency_key=payload.idempotency_key)
-    await repo.add_event(job.id, "queued", "任务已创建，等待后台 Worker。", 0)
+    now = datetime.now(timezone.utc)
+    job = await repo.create(
+        user_id=user.id,
+        query=payload.query,
+        platforms=payload.platforms,
+        analysis_mode=payload.analysis_mode,
+        idempotency_key=payload.idempotency_key,
+        dispatch_pending_at=now,
+    )
+    db.add(JobEvent(job_id=job.id, event_type="queued", message="任务已创建，等待后台 Worker。", progress=0, level="info"))
+    await db.commit()
     try:
-        job.arq_job_id = await queue.enqueue(str(job.id), job.execution_version)
-        await repo.save(job)
+        scheduled_job = await _enqueue_committed_job(db, queue, job.id, job.execution_version)
     except Exception as exc:
-        job.status, job.error_code, job.error_message = "failed", "WORKER_FAILED", "任务队列暂时不可用，请稍后重试。"
-        await repo.save(job)
-        await repo.add_event(job.id, "failed", job.error_message, 0, "error")
-        raise AppError(503, "WORKER_FAILED", job.error_message) from exc
-    return job
+        raise AppError(503, "WORKER_FAILED", ERROR_MESSAGES["WORKER_FAILED"]) from exc
+    return scheduled_job or job
 
 
 @router.get("", response_model=dict)
@@ -102,14 +109,15 @@ async def get_events(job_id: uuid.UUID, user: User = Depends(get_current_user), 
 
 @router.get("/{job_id}/clarification", response_model=dict)
 async def get_clarification(job_id: uuid.UUID, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    await require_job(job_id, user, db)
+    job = await require_job(job_id, user, db)
     items = await JobRepository(db).clarifications(job_id)
-    current = next((item for item in reversed(items) if item.status == "pending"), None)
+    current = next((item for item in reversed(items) if item.status == "pending"), None) if job.status == "waiting_user" else None
+    history = [item for item in items if item.status == "answered"]
     return {
         "job_id": job_id,
         "max_rounds": 2,
         "current": ClarificationRead.model_validate(current) if current else None,
-        "history": [ClarificationRead.model_validate(item) for item in items],
+        "history": [ClarificationRead.model_validate(item) for item in history],
     }
 
 
@@ -149,6 +157,7 @@ async def answer_clarification(
     job.error_message = None
     job.execution_version += 1
     job.arq_job_id = None
+    job.dispatch_pending_at = datetime.now(timezone.utc)
     execution_version = job.execution_version
     db.add(JobEvent(job_id=job.id, event_type="clarification_answered", message="已收到研究范围补充，任务将重新判断范围。", progress=job.progress, level="info"))
     await db.commit()
@@ -165,6 +174,7 @@ async def cancel_job(job_id: uuid.UUID, user: User = Depends(get_current_user), 
     if job.status not in {"pending", "running", "waiting_user"}:
         return job
     job.status, job.cancelled_at, job.error_code, job.error_message = "cancelled", datetime.now(timezone.utc), "JOB_CANCELLED", ERROR_MESSAGES["JOB_CANCELLED"]
+    job.dispatch_pending_at = None
     await JobRepository(db).save(job)
     await JobRepository(db).add_event(job.id, "cancelled", "用户已取消任务。", job.progress, "warning")
     return job
@@ -186,6 +196,7 @@ async def retry_job(job_id: uuid.UUID, user: User = Depends(get_current_user), d
     job.execution_version += 1
     job.status, job.progress, job.error_code, job.error_message, job.cancelled_at = "pending", 0, None, None, None
     job.arq_job_id = None
+    job.dispatch_pending_at = datetime.now(timezone.utc)
     execution_version = job.execution_version
     db.add(JobEvent(job_id=job.id, event_type="queued", message=f"任务已重新入队（第 {job.retry_count} 次重试）。", progress=0, level="info"))
     await db.commit()
@@ -196,9 +207,87 @@ async def retry_job(job_id: uuid.UUID, user: User = Depends(get_current_user), d
     return scheduled_job or job
 
 
+@router.post("/{job_id}/revisions", response_model=JobRead, status_code=202)
+async def revise_job(
+    job_id: uuid.UUID,
+    payload: JobRevisionCreate,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    queue: JobQueue = Depends(get_job_queue),
+):
+    repo = JobRepository(db)
+    source = await repo.get_owned_for_update(job_id, user.id)
+    if not source:
+        raise AppError(404, "JOB_NOT_FOUND", ERROR_MESSAGES["JOB_NOT_FOUND"])
+    if source.status in {"pending", "running"}:
+        raise AppError(409, "JOB_REVISION_INVALID", ERROR_MESSAGES["JOB_REVISION_INVALID"])
+    if source.status not in {"waiting_user", "failed", "cancelled", "completed", "partial"}:
+        raise AppError(409, "JOB_REVISION_INVALID", ERROR_MESSAGES["JOB_REVISION_INVALID"])
+
+    existing = await repo.get_by_idempotency(user.id, payload.idempotency_key)
+    if existing:
+        if existing.revision_of_job_id == source.id and existing.query == payload.query:
+            return existing
+        raise AppError(409, "JOB_REVISION_CONFLICT", ERROR_MESSAGES["JOB_REVISION_CONFLICT"])
+
+    since = datetime.now(timezone.utc).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    usage = await ReportRepository(db).usage_summary(user.id, since)
+    if usage["jobs_used"] >= USER_MONTHLY_JOB_LIMIT:
+        raise AppError(429, "USAGE_LIMIT_REACHED", "本月公开测试用量已用完。")
+    if source.analysis_mode == "deep":
+        from src.tools.capabilities import get_tool_capabilities
+        if not get_tool_capabilities()["get_transcript"].enabled:
+            raise AppError(409, "ASR_UNAVAILABLE", ERROR_MESSAGES["ASR_UNAVAILABLE"])
+
+    now = datetime.now(timezone.utc)
+    source_was_waiting = source.status == "waiting_user"
+    if source_was_waiting:
+        source.status = "cancelled"
+        source.cancelled_at = now
+        source.error_code = "JOB_CANCELLED"
+        source.error_message = ERROR_MESSAGES["JOB_CANCELLED"]
+        source.dispatch_pending_at = None
+
+    revised = await repo.create(
+        user_id=user.id,
+        query=payload.query,
+        platforms=source.platforms,
+        analysis_mode=source.analysis_mode,
+        idempotency_key=payload.idempotency_key,
+        revision_of_job_id=source.id,
+        dispatch_pending_at=now,
+    )
+    db.add(JobEvent(
+        job_id=source.id,
+        event_type="scope_revision_created",
+        message=(
+            f"已取消旧任务并创建修订任务 {str(revised.id)[:8]}；回答保留。"
+            if source_was_waiting
+            else f"已创建修订任务 {str(revised.id)[:8]}；原任务保留。"
+        ),
+        progress=source.progress,
+        level="info",
+    ))
+    db.add(JobEvent(
+        job_id=revised.id,
+        event_type="scope_revision_started",
+        message="由上一任务的范围修订创建。",
+        progress=0,
+        level="info",
+    ))
+    await db.commit()
+    try:
+        scheduled_job = await _enqueue_committed_job(db, queue, revised.id, revised.execution_version)
+    except Exception as exc:
+        raise AppError(503, "WORKER_FAILED", ERROR_MESSAGES["WORKER_FAILED"]) from exc
+    return scheduled_job or revised
+
+
 @router.delete("/{job_id}", status_code=204)
 async def delete_job(job_id: uuid.UUID, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     job = await require_job(job_id, user, db)
     if job.status in {"pending", "running"}:
         raise AppError(409, "JOB_RUNNING", "运行中的任务请先取消。")
+    if await JobRepository(db).has_revisions(job.id):
+        raise AppError(409, "JOB_HAS_REVISIONS", ERROR_MESSAGES["JOB_HAS_REVISIONS"])
     await JobRepository(db).delete_owned(job)

@@ -26,6 +26,7 @@ class AnalysisJob(Base):
     __table_args__ = (
         UniqueConstraint("user_id", "idempotency_key", name="uq_job_user_idempotency"),
         Index("ix_jobs_user_created", "user_id", "created_at"),
+        Index("ix_analysis_jobs_pending_dispatch", "status", "dispatch_pending_at"),
     )
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
@@ -37,6 +38,8 @@ class AnalysisJob(Base):
     retry_count: Mapped[int] = mapped_column(Integer, default=0)
     clarification_round: Mapped[int] = mapped_column(Integer, default=0)
     execution_version: Mapped[int] = mapped_column(Integer, default=0)
+    revision_of_job_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("analysis_jobs.id", name="fk_analysis_jobs_revision_of_job_id", ondelete="RESTRICT"), nullable=True, index=True)
+    dispatch_pending_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     topic_spec: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     interaction_usage: Mapped[dict] = mapped_column(JSON, default=dict)
     idempotency_key: Mapped[str] = mapped_column(String(128))

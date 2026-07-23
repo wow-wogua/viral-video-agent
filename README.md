@@ -207,9 +207,11 @@ ASR_MAX_VIDEOS=5
 
 ## 后台任务 API
 
-### 交互式竞争情报 vNext-A（默认关闭）
+### 交互式竞争情报 vNext-A / vNext-B（默认关闭）
 
-`ENABLE_INTERACTIVE_BRIEF=false`（App 与 Worker 一致）时，现有 Job 行为保持不变。开启后，模糊需求会先生成最多两轮澄清，任务进入 `waiting_user`；用户可在 Job 页用极简表单回答，随后恢复同一 Job 并把 TopicSpec 传入现有 LangGraph。该路线不重新打开冻结的 P0-C，也不包含候选账号确认或新 UI 框架；首页仅保留原有进入结构并精简文案。详见 [vNext-A 设计](docs/interactive-intelligence-vnext.md) 与 [2026-07-22 验证记录](docs/interactive-intelligence-vnext-a-validation-20260722.md)。P0-C 质量 Gate 仍失败并冻结，P0-D/P0-E 未开始。
+`ENABLE_INTERACTIVE_BRIEF=false`（App 与 Worker 一致）时，现有 Job 行为保持不变。开启后，模糊需求会先生成最多两轮澄清，任务进入 `waiting_user`；Job 页分开展示当前问题和已回答历史。
+
+修改研究范围会创建新 Job，并用 `revision_of_job_id` 保留审计关系，不覆盖旧回答、TopicSpec 或报告。Worker 每分钟有限批量 reconciliation 超时的 `pending + arq_job_id=null` 派发意图，复用原 `execution_version` 和确定性 Arq ID，不增加 `retry_count`。该路线不重新打开冻结的 P0-C，也不包含候选账号确认或新 UI 框架。详见 [vNext 设计](docs/interactive-intelligence-vnext.md)、[vNext-A 验证](docs/interactive-intelligence-vnext-a-validation-20260722.md) 与 [vNext-B 验证](docs/interactive-intelligence-vnext-b-validation-20260723.md)。P0-C 质量 Gate 仍失败并冻结，vNext-C、P0-D/P0-E 未开始。
 
 ```text
 POST   /jobs
@@ -217,6 +219,7 @@ GET    /jobs
 GET    /jobs/{job_id}
 POST   /jobs/{job_id}/cancel
 POST   /jobs/{job_id}/retry
+POST   /jobs/{job_id}/revisions
 GET    /jobs/{job_id}/events
 GET    /jobs/{job_id}/clarification
 POST   /jobs/{job_id}/clarification
@@ -225,7 +228,7 @@ POST   /reports/{report_id}/shares
 POST   /reports/{report_id}/feedback
 ```
 
-状态：`pending`、`running`、`completed`、`partial`、`failed`、`cancelled`。
+状态：`pending`、`running`、`waiting_user`、`completed`、`partial`、`failed`、`cancelled`。
 
 Redis 只保存队列、临时状态、事件和缓存；长期业务事实全部进入 PostgreSQL。
 
@@ -275,7 +278,7 @@ cd ..
 docker compose config --quiet
 ```
 
-当前 vNext-A 分支：76 条 Python 测试，其中 14 条交互式澄清闭环测试覆盖提交后入队、队列失败恢复、取消/执行版本并发和真实两轮上限，并保留冻结 B 站产品输入与可选 Researcher 路由回归；历史 MVP 记录见 [2026-07-13 验收文档](docs/validation-20260713.md)，Worker 接入记录见 [2026-07-20 验证文档](docs/researcher-finetuned-worker-integration-20260720.md)。
+当前 vNext-B Gate 候选：88 条 Python 测试。vNext-A 的 14 条澄清闭环测试继续通过；vNext-B 覆盖澄清历史所有权、创建新 Job 的范围修订、审计保留、状态限制、崩溃窗口恢复、确定性 Arq ID、旧执行版本隔离和 reconciliation 幂等。完整结果见 [vNext-B 验证记录](docs/interactive-intelligence-vnext-b-validation-20260723.md)。
 
 ### 真实 API 冒烟（2026-07-13）
 

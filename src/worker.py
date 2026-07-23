@@ -2,7 +2,7 @@ import asyncio
 import uuid
 from datetime import datetime, timezone
 
-from arq import Retry
+from arq import Retry, cron
 from arq.connections import RedisSettings
 
 from src.api.errors import ERROR_MESSAGES
@@ -10,6 +10,7 @@ from src.briefing.service import validate_job_brief
 from src.config import ASR_MAX_VIDEOS, ASR_MAX_VIDEO_SECONDS, DEFAULT_LLM_MODEL_ID, DEFAULT_LLM_PROVIDER, ENABLE_INTERACTIVE_BRIEF, JOB_MAX_RETRIES, JOB_TIMEOUT_SECONDS, REDIS_URL, WORKER_MAX_JOBS
 from src.db.models import EvidenceItem, Report, UsageRecord
 from src.db.session import async_session_factory
+from src.dispatch import reconcile_pending_dispatches
 from src.gateway.cost_tracker import cost_tracker
 from src.gateway.model_bootstrap import configure_optional_model_routes
 from src.agents.analyst import analyst_node
@@ -142,6 +143,7 @@ async def run_analysis_job(ctx: dict, job_id_value: str, execution_version_value
         if not job or job.status != "pending": return
         if execution_version_value is not None and job.execution_version != int(execution_version_value): return
         job.status, job.started_at, job.error_code, job.error_message = "running", datetime.now(timezone.utc), None, None
+        job.dispatch_pending_at = None
         await repo.save(job)
         user_id, query, platforms, retry_count, analysis_mode, execution_version = job.user_id, job.query, job.platforms, job.retry_count, job.analysis_mode, job.execution_version
     cost_tracker.reset(); fallback_counter.reset(); trace_tracker.reset()
@@ -194,6 +196,7 @@ async def startup(ctx: dict) -> None:
 
 class WorkerSettings:
     functions = [run_analysis_job]
+    cron_jobs = [cron(reconcile_pending_dispatches, minute=set(range(60)), second=30, timeout=60)]
     redis_settings = RedisSettings.from_dsn(REDIS_URL)
     max_jobs = WORKER_MAX_JOBS
     job_timeout = JOB_TIMEOUT_SECONDS + 30

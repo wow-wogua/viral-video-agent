@@ -61,6 +61,8 @@ COOKIE_SECURE: bool = APP_ENV == "production"
 JOB_TIMEOUT_SECONDS: int = int(os.getenv("JOB_TIMEOUT_SECONDS", "600"))
 JOB_MAX_RETRIES: int = int(os.getenv("JOB_MAX_RETRIES", "2"))
 WORKER_MAX_JOBS: int = int(os.getenv("WORKER_MAX_JOBS", "2"))
+DISPATCH_RECONCILE_MIN_AGE_SECONDS: int = _bounded_int("DISPATCH_RECONCILE_MIN_AGE_SECONDS", 60, 5, 3600)
+DISPATCH_RECONCILE_BATCH_SIZE: int = _bounded_int("DISPATCH_RECONCILE_BATCH_SIZE", 50, 1, 200)
 USER_MONTHLY_JOB_LIMIT: int = int(os.getenv("USER_MONTHLY_JOB_LIMIT", "30"))
 MCP_SERVER_URL: str = os.getenv("MCP_SERVER_URL", "http://127.0.0.1:8001/sse")
 ENABLE_MOCK_TOOLS: bool = os.getenv("ENABLE_MOCK_TOOLS", "false").lower() == "true"

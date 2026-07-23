@@ -1,45 +1,55 @@
 'use client';
 
 import Link from 'next/link';
-import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, RotateCcw, Square } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
+import { ArrowLeft, PencilLine, RotateCcw, Square } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppShell } from '@/components/AppShell';
 import { JobProgress } from '@/components/product';
 import { Button, Card, ErrorState, LoadingState, StatusBadge, Textarea } from '@/components/ui';
-import { answerJobClarification, cancelJob, getJob, getJobClarification, getJobEvents, readableError, retryJob, type ClarificationRequest, type Job, type JobEvent } from '@/lib/api';
+import { answerJobClarification, cancelJob, getJob, getJobClarification, getJobEvents, readableError, retryJob, reviseJob, type ClarificationRequest, type Job, type JobEvent } from '@/lib/api';
 
 export default function JobPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const revisionMode = searchParams.get('revise') === '1';
   const [job, setJob] = useState<Job | null>(null);
   const [events, setEvents] = useState<JobEvent[]>([]);
   const [clarification, setClarification] = useState<ClarificationRequest | null>(null);
+  const [clarificationHistory, setClarificationHistory] = useState<ClarificationRequest[]>([]);
   const [selectedOption, setSelectedOption] = useState('');
   const [customAnswer, setCustomAnswer] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [answerError, setAnswerError] = useState('');
+  const [showRevision, setShowRevision] = useState(revisionMode);
+  const [revisionQuery, setRevisionQuery] = useState('');
+  const [revisionError, setRevisionError] = useState('');
+  const [revising, setRevising] = useState(false);
+  const revisionKey = useRef('');
 
   const load = useCallback(async () => {
     try {
       const [jobData, eventData] = await Promise.all([getJob(id), getJobEvents(id)]);
       setJob(jobData);
       setEvents(eventData.items);
-      if (jobData.status === 'waiting_user') {
-        setClarification((await getJobClarification(id)).current);
-      } else {
-        setClarification(null);
+      const clarificationData = jobData.clarification_round > 0 ? await getJobClarification(id) : null;
+      setClarification(jobData.status === 'waiting_user' ? clarificationData?.current || null : null);
+      setClarificationHistory(clarificationData?.history || []);
+      if (revisionMode) {
+        setShowRevision(true);
+        setRevisionQuery((current) => current || jobData.query);
       }
       setError('');
-      if (jobData.report_id && ['completed', 'partial'].includes(jobData.status)) router.replace(`/reports/${jobData.report_id}`);
+      if (!revisionMode && jobData.report_id && ['completed', 'partial'].includes(jobData.status)) router.replace(`/reports/${jobData.report_id}`);
     } catch (err) {
       setError(readableError(err));
     } finally {
       setLoading(false);
     }
-  }, [id, router]);
+  }, [id, revisionMode, router]);
 
   useEffect(() => {
     load();
@@ -49,6 +59,21 @@ export default function JobPage() {
 
   const cancel = async () => { setJob(await cancelJob(id)); await load(); };
   const retry = async () => { const updated = await retryJob(id); router.replace(`/jobs/${updated.id}`); };
+  const openRevision = () => { if (!job) return; setRevisionQuery(job.query); setRevisionError(''); setShowRevision(true); };
+  const revise = async () => {
+    if (!job || !revisionQuery.trim() || revisionQuery.trim() === job.query.trim()) return;
+    setRevising(true);
+    setRevisionError('');
+    if (!revisionKey.current) revisionKey.current = crypto.randomUUID();
+    try {
+      const revised = await reviseJob(id, { query: revisionQuery.trim(), idempotency_key: revisionKey.current });
+      router.replace(`/jobs/${revised.id}`);
+    } catch (err) {
+      setRevisionError(readableError(err));
+    } finally {
+      setRevising(false);
+    }
+  };
   const answer = async () => {
     if (!clarification || (!selectedOption && !customAnswer.trim())) return;
     setSubmitting(true);
@@ -77,8 +102,22 @@ export default function JobPage() {
             <Link href="/history" className="inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"><ArrowLeft className="h-4 w-4" aria-hidden="true" />返回任务列表</Link>
             <div className="mt-4 grid gap-5 border-b pb-7 sm:grid-cols-[1fr_auto] sm:items-start">
               <div className="min-w-0"><p className="eyebrow">Live job / {job.id.slice(0, 6)}</p><h1 className="break-content title-balance mt-2 text-2xl font-black tracking-[-.035em] sm:text-3xl">{job.query}</h1><div className="mt-4 flex flex-wrap items-center gap-3"><StatusBadge status={job.status} /><span className="font-mono text-xs tabular-nums text-muted-foreground">进度 {job.progress}%</span><span className="text-xs text-muted-foreground">B站 · {job.analysis_mode === 'deep' ? '内容深度分析' : '标准分析'}</span></div></div>
-              <div className="flex gap-2">{['pending', 'running', 'waiting_user'].includes(job.status) && <Button variant="danger" size="sm" onClick={cancel}><Square className="h-3.5 w-3.5" aria-hidden="true" />取消任务</Button>}{['failed', 'cancelled'].includes(job.status) && <Button size="sm" onClick={retry}><RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />重新分析</Button>}</div>
+              <div className="flex flex-wrap gap-2">{['pending', 'running', 'waiting_user'].includes(job.status) && <Button variant="danger" size="sm" onClick={cancel}><Square className="h-3.5 w-3.5" aria-hidden="true" />取消任务</Button>}{['failed', 'cancelled'].includes(job.status) && <Button size="sm" onClick={retry}><RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />重新分析</Button>}{['waiting_user', 'failed', 'cancelled', 'completed', 'partial'].includes(job.status) && <Button variant="secondary" size="sm" onClick={openRevision}><PencilLine className="h-3.5 w-3.5" aria-hidden="true" />修改范围</Button>}</div>
             </div>
+
+            {job.revision_of_job_id && <p className="mt-4 text-sm text-muted-foreground">修订自 <Link href={`/jobs/${job.revision_of_job_id}`} className="font-mono font-semibold text-foreground underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{job.revision_of_job_id.slice(0, 8)}</Link></p>}
+
+            {showRevision && ['waiting_user', 'failed', 'cancelled', 'completed', 'partial'].includes(job.status) && (
+              <Card className="mt-6 p-5 sm:p-6">
+                <p className="eyebrow">范围修订</p>
+                <h2 className="mt-2 text-lg font-bold">创建修订任务</h2>
+                <p className="mt-1 text-sm text-muted-foreground">旧任务和回答会保留。</p>
+                <label htmlFor="revision-query" className="mt-4 block text-sm font-semibold">新的研究范围</label>
+                <Textarea id="revision-query" className="mt-2 min-h-24" maxLength={2000} value={revisionQuery} onChange={(event) => setRevisionQuery(event.target.value)} />
+                {revisionError && <p className="mt-2 text-sm text-destructive" role="alert">{revisionError}</p>}
+                <div className="mt-3 flex flex-wrap gap-2"><Button onClick={revise} isLoading={revising} disabled={!revisionQuery.trim() || revisionQuery.trim() === job.query.trim()}>创建修订任务</Button><Button variant="ghost" onClick={() => setShowRevision(false)} disabled={revising}>取消</Button></div>
+              </Card>
+            )}
 
             {job.status === 'waiting_user' && clarification && (
               <Card className="mt-6 p-5 sm:p-6">
@@ -97,6 +136,19 @@ export default function JobPage() {
                 {answerError && <p className="mt-2 text-sm text-destructive" role="alert">{answerError}</p>}
                 <Button className="mt-3" onClick={answer} isLoading={submitting} disabled={!selectedOption && !customAnswer.trim()}>提交并继续</Button>
               </Card>
+            )}
+
+            {clarificationHistory.length > 0 && (
+              <section className="mt-7" aria-labelledby="clarification-history-title">
+                <p className="eyebrow">Clarification history</p>
+                <h2 id="clarification-history-title" className="mt-1 text-xl font-black">澄清记录</h2>
+                <div className="mt-3 grid gap-3">
+                  {clarificationHistory.map((item) => {
+                    const selected = item.options.find((option) => option.id === item.selected_option_id)?.label;
+                    return <Card key={item.request_id} className="p-4 sm:p-5"><div className="flex flex-wrap items-center justify-between gap-2"><p className="font-mono text-xs text-muted-foreground">第 {item.round} 轮</p><span className="text-xs font-semibold text-success">已回答</span></div><h3 className="mt-2 text-sm font-bold">{item.question}</h3>{selected && <p className="mt-2 text-sm text-foreground">{selected}</p>}{item.custom_answer && <p className="mt-1 text-sm leading-6 text-muted-foreground">{item.custom_answer}</p>}</Card>;
+                  })}
+                </div>
+              </section>
             )}
 
             <Card className="mt-7 overflow-hidden p-0">

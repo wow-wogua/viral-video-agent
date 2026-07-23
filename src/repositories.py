@@ -27,11 +27,29 @@ class JobRepository:
     async def get(self, job_id: uuid.UUID) -> AnalysisJob | None: return await self.db.get(AnalysisJob, job_id)
     async def get_by_idempotency(self, user_id: uuid.UUID, key: str) -> AnalysisJob | None:
         return await self.db.scalar(select(AnalysisJob).options(selectinload(AnalysisJob.reports)).where(AnalysisJob.user_id == user_id, AnalysisJob.idempotency_key == key))
-    async def create(self, *, user_id: uuid.UUID, query: str, platforms: list[str], analysis_mode: str, idempotency_key: str) -> AnalysisJob:
-        job = AnalysisJob(user_id=user_id, query=query, platforms=platforms, analysis_mode=analysis_mode, idempotency_key=idempotency_key)
+    async def create(
+        self,
+        *,
+        user_id: uuid.UUID,
+        query: str,
+        platforms: list[str],
+        analysis_mode: str,
+        idempotency_key: str,
+        revision_of_job_id: uuid.UUID | None = None,
+        dispatch_pending_at: datetime | None = None,
+    ) -> AnalysisJob:
+        job = AnalysisJob(
+            user_id=user_id,
+            query=query,
+            platforms=platforms,
+            analysis_mode=analysis_mode,
+            idempotency_key=idempotency_key,
+            revision_of_job_id=revision_of_job_id,
+            dispatch_pending_at=dispatch_pending_at,
+        )
         job.reports = []
         self.db.add(job)
-        await self.db.commit()
+        await self.db.flush()
         return job
     async def list_owned(self, user_id: uuid.UUID, limit: int, offset: int, status: str | None = None) -> tuple[list[AnalysisJob], int]:
         filters = [AnalysisJob.user_id == user_id];
@@ -41,6 +59,24 @@ class JobRepository:
         return rows, total
     async def save(self, job: AnalysisJob) -> AnalysisJob: await self.db.commit(); return job
     async def delete_owned(self, job: AnalysisJob) -> None: await self.db.delete(job); await self.db.commit()
+    async def has_revisions(self, job_id: uuid.UUID) -> bool:
+        return bool(await self.db.scalar(select(func.count()).select_from(AnalysisJob).where(AnalysisJob.revision_of_job_id == job_id)))
+    async def lease_pending_dispatches(self, cutoff: datetime, leased_at: datetime, limit: int) -> list[AnalysisJob]:
+        jobs = list((await self.db.scalars(
+            select(AnalysisJob)
+            .where(
+                AnalysisJob.status == "pending",
+                AnalysisJob.arq_job_id.is_(None),
+                AnalysisJob.dispatch_pending_at.is_not(None),
+                AnalysisJob.dispatch_pending_at <= cutoff,
+            )
+            .order_by(AnalysisJob.dispatch_pending_at.asc())
+            .limit(limit)
+            .with_for_update(skip_locked=True)
+        )).all())
+        for job in jobs:
+            job.dispatch_pending_at = leased_at
+        return jobs
     async def clear_outputs(self, job_id: uuid.UUID) -> None:
         await self.db.execute(delete(EvidenceItem).where(EvidenceItem.job_id == job_id))
         await self.db.execute(delete(UsageRecord).where(UsageRecord.job_id == job_id))
