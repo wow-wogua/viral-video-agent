@@ -186,9 +186,7 @@ async def retry_job(job_id: uuid.UUID, user: User = Depends(get_current_user), d
     job = await repo.get_owned_for_update(job_id, user.id)
     if not job:
         raise AppError(404, "JOB_NOT_FOUND", ERROR_MESSAGES["JOB_NOT_FOUND"])
-    if job.status not in {"failed", "cancelled", "partial"}:
-        raise AppError(409, "JOB_NOT_RETRYABLE", ERROR_MESSAGES["JOB_NOT_RETRYABLE"])
-    if await repo.pending_clarification(job.id):
+    if not job.can_retry:
         raise AppError(409, "JOB_NOT_RETRYABLE", ERROR_MESSAGES["JOB_NOT_RETRYABLE"])
     await repo.clear_outputs(job.id)
     set_committed_value(job, "reports", [])
@@ -219,9 +217,7 @@ async def revise_job(
     source = await repo.get_owned_for_update(job_id, user.id)
     if not source:
         raise AppError(404, "JOB_NOT_FOUND", ERROR_MESSAGES["JOB_NOT_FOUND"])
-    if source.status in {"pending", "running"}:
-        raise AppError(409, "JOB_REVISION_INVALID", ERROR_MESSAGES["JOB_REVISION_INVALID"])
-    if source.status not in {"waiting_user", "failed", "cancelled", "completed", "partial"}:
+    if not source.can_revise:
         raise AppError(409, "JOB_REVISION_INVALID", ERROR_MESSAGES["JOB_REVISION_INVALID"])
 
     existing = await repo.get_by_idempotency(user.id, payload.idempotency_key)

@@ -213,6 +213,8 @@ ASR_MAX_VIDEOS=5
 
 修改研究范围会创建新 Job，并用 `revision_of_job_id` 保留审计关系，不覆盖旧回答、TopicSpec 或报告。Worker 每分钟有限批量 reconciliation 超时的 `pending + arq_job_id=null` 派发意图，复用原 `execution_version` 和确定性 Arq ID，不增加 `retry_count`。该路线不重新打开冻结的 P0-C，也不包含候选账号确认或新 UI 框架。详见 [vNext 设计](docs/interactive-intelligence-vnext.md)、[vNext-A 验证](docs/interactive-intelligence-vnext-a-validation-20260722.md) 与 [vNext-B 验证](docs/interactive-intelligence-vnext-b-validation-20260723.md)。P0-C 质量 Gate 仍失败并冻结，vNext-C、P0-D/P0-E 未开始。
 
+Job 响应提供服务端计算的 `can_retry` / `can_revise`。前端不再仅凭状态猜测操作；保留 pending clarification 的 cancelled Job 不显示重试，但仍可创建范围修订。
+
 ```text
 POST   /jobs
 GET    /jobs

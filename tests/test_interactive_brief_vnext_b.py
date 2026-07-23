@@ -1,5 +1,6 @@
 import uuid
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 import pytest
 import pytest_asyncio
@@ -161,6 +162,14 @@ async def test_revision_creates_audited_job_without_overwriting_answers(api_clie
     assert first.json()["retry_count"] == 0
     assert queue.calls == [(str(revised_id), 0)]
 
+    source_response = await client.get(f"/jobs/{source_id}")
+    assert source_response.status_code == 200
+    assert source_response.json()["can_retry"] is False
+    assert source_response.json()["can_revise"] is True
+    direct_retry = await client.post(f"/jobs/{source_id}/retry")
+    assert direct_retry.status_code == 409
+    assert direct_retry.json()["error_code"] == "JOB_NOT_RETRYABLE"
+
     async with factory() as db:
         source = await db.get(AnalysisJob, source_id)
         revised = await db.get(AnalysisJob, revised_id)
@@ -184,6 +193,80 @@ async def test_revision_creates_audited_job_without_overwriting_answers(api_clie
     blocked_delete = await client.delete(f"/jobs/{source_id}")
     assert blocked_delete.status_code == 409
     assert blocked_delete.json()["error_code"] == "JOB_HAS_REVISIONS"
+
+
+@pytest.mark.asyncio
+async def test_cancelled_waiting_job_with_pending_clarification_cannot_retry(api_client):
+    client, factory, queue = api_client
+    owner_id = await register(client, "vnext-b-cancelled-clarification@example.com")
+    job_id = await create_job(factory, owner_id, status="waiting_user", clarification_round=1)
+    async with factory() as db:
+        db.add(JobClarification(
+            job_id=job_id,
+            round=1,
+            question="是否只看专业账号？",
+            options=options(),
+            allow_custom=True,
+            status="pending",
+        ))
+        await db.commit()
+
+    cancelled = await client.post(f"/jobs/{job_id}/cancel")
+    assert cancelled.status_code == 200
+    assert cancelled.json()["status"] == "cancelled"
+    assert cancelled.json()["can_retry"] is False
+    assert cancelled.json()["can_revise"] is True
+
+    retry = await client.post(f"/jobs/{job_id}/retry")
+    assert retry.status_code == 409
+    assert retry.json()["error_code"] == "JOB_NOT_RETRYABLE"
+    assert queue.calls == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("status", "can_retry", "can_revise"),
+    [
+        ("failed", True, True),
+        ("cancelled", True, True),
+        ("partial", True, True),
+        ("completed", False, True),
+        ("pending", False, False),
+        ("running", False, False),
+        ("waiting_user", False, True),
+    ],
+)
+async def test_job_action_capabilities_follow_backend_state_rules(api_client, status, can_retry, can_revise):
+    client, factory, _ = api_client
+    owner_id = await register(client, f"vnext-b-actions-{status}@example.com")
+    job_id = await create_job(factory, owner_id, status=status)
+
+    detail = await client.get(f"/jobs/{job_id}")
+    assert detail.status_code == 200
+    assert detail.json()["can_retry"] is can_retry
+    assert detail.json()["can_revise"] is can_revise
+
+    listing = await client.get("/jobs?limit=100")
+    listed = next(item for item in listing.json()["items"] if item["id"] == str(job_id))
+    assert listed["can_retry"] is can_retry
+    assert listed["can_revise"] is can_revise
+
+
+def test_frontend_retry_actions_use_server_capabilities_and_handle_errors():
+    root = Path(__file__).resolve().parents[1]
+    job_page = (root / "frontend/src/app/jobs/[id]/page.tsx").read_text(encoding="utf-8")
+    history_page = (root / "frontend/src/app/history/page.tsx").read_text(encoding="utf-8")
+
+    assert "job.can_retry &&" in job_page
+    assert "job.can_revise &&" in job_page
+    assert "setRetryError(readableError(err))" in job_page
+    assert "isLoading={retrying}" in job_page
+    assert "retryError &&" in job_page and 'role="alert"' in job_page
+    assert "job.can_retry &&" in history_page
+    assert "setRetryErrors" in history_page
+    assert "isLoading={retryingId === job.id}" in history_page
+    assert "['failed', 'cancelled'].includes(job.status)" not in job_page
+    assert "['failed', 'cancelled'].includes(job.status)" not in history_page
 
 
 @pytest.mark.asyncio

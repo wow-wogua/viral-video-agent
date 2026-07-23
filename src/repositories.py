@@ -26,7 +26,7 @@ class JobRepository:
         return await self.db.scalar(select(AnalysisJob).options(selectinload(AnalysisJob.reports), selectinload(AnalysisJob.clarifications)).where(AnalysisJob.id == job_id).execution_options(populate_existing=True).with_for_update())
     async def get(self, job_id: uuid.UUID) -> AnalysisJob | None: return await self.db.get(AnalysisJob, job_id)
     async def get_by_idempotency(self, user_id: uuid.UUID, key: str) -> AnalysisJob | None:
-        return await self.db.scalar(select(AnalysisJob).options(selectinload(AnalysisJob.reports)).where(AnalysisJob.user_id == user_id, AnalysisJob.idempotency_key == key))
+        return await self.db.scalar(select(AnalysisJob).options(selectinload(AnalysisJob.reports), selectinload(AnalysisJob.clarifications)).where(AnalysisJob.user_id == user_id, AnalysisJob.idempotency_key == key))
     async def create(
         self,
         *,
@@ -48,13 +48,14 @@ class JobRepository:
             dispatch_pending_at=dispatch_pending_at,
         )
         job.reports = []
+        job.clarifications = []
         self.db.add(job)
         await self.db.flush()
         return job
     async def list_owned(self, user_id: uuid.UUID, limit: int, offset: int, status: str | None = None) -> tuple[list[AnalysisJob], int]:
         filters = [AnalysisJob.user_id == user_id];
         if status: filters.append(AnalysisJob.status == status)
-        rows = list((await self.db.scalars(select(AnalysisJob).options(selectinload(AnalysisJob.reports)).where(*filters).order_by(AnalysisJob.created_at.desc()).limit(limit).offset(offset))).all())
+        rows = list((await self.db.scalars(select(AnalysisJob).options(selectinload(AnalysisJob.reports), selectinload(AnalysisJob.clarifications)).where(*filters).order_by(AnalysisJob.created_at.desc()).limit(limit).offset(offset))).all())
         total = await self.db.scalar(select(func.count()).select_from(AnalysisJob).where(*filters)) or 0
         return rows, total
     async def save(self, job: AnalysisJob) -> AnalysisJob: await self.db.commit(); return job
@@ -90,10 +91,6 @@ class JobRepository:
         return await self.db.scalar(select(JobClarification).where(JobClarification.job_id == job_id, JobClarification.request_id == request_id))
     async def clarification_by_request_for_update(self, job_id: uuid.UUID, request_id: uuid.UUID) -> JobClarification | None:
         return await self.db.scalar(select(JobClarification).where(JobClarification.job_id == job_id, JobClarification.request_id == request_id).execution_options(populate_existing=True).with_for_update())
-    async def pending_clarification(self, job_id: uuid.UUID) -> JobClarification | None:
-        return await self.db.scalar(select(JobClarification).where(JobClarification.job_id == job_id, JobClarification.status == "pending").order_by(JobClarification.round.desc()))
-
-
 class ReportRepository:
     def __init__(self, db: AsyncSession): self.db = db
     async def get_owned(self, report_id: uuid.UUID, user_id: uuid.UUID) -> Report | None:

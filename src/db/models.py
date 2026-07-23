@@ -58,6 +58,16 @@ class AnalysisJob(Base):
     def report_id(self) -> uuid.UUID | None:
         return self.reports[-1].id if self.reports else None
 
+    @property
+    def can_retry(self) -> bool:
+        return self.status in {"failed", "cancelled", "partial"} and not any(
+            item.status == "pending" for item in self.clarifications
+        )
+
+    @property
+    def can_revise(self) -> bool:
+        return self.status in {"waiting_user", "failed", "cancelled", "completed", "partial"}
+
 
 class Report(Base):
     __tablename__ = "reports"

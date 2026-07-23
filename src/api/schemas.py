@@ -60,6 +60,8 @@ class JobRead(BaseModel):
     clarification_round: int
     execution_version: int
     revision_of_job_id: uuid.UUID | None = None
+    can_retry: bool
+    can_revise: bool
     topic_spec: TopicSpec | None = None
     interaction_usage: dict = Field(default_factory=dict)
     error_code: str | None

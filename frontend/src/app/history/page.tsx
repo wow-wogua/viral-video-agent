@@ -14,6 +14,8 @@ export default function HistoryPage() {
   const [date, setDate] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [retryingId, setRetryingId] = useState('');
+  const [retryErrors, setRetryErrors] = useState<Record<string, string>>({});
 
   const load = useCallback(() => {
     setLoading(true);
@@ -35,11 +37,16 @@ export default function HistoryPage() {
   };
 
   const retry = async (id: string) => {
+    setRetryingId(id);
+    setRetryErrors((current) => ({ ...current, [id]: '' }));
     try {
       const job = await retryJob(id);
       window.location.href = `/jobs/${job.id}`;
     } catch (err) {
-      setError(readableError(err));
+      setRetryErrors((current) => ({ ...current, [id]: readableError(err) }));
+      load();
+    } finally {
+      setRetryingId('');
     }
   };
 
@@ -69,7 +76,7 @@ export default function HistoryPage() {
                   <p className="break-content mt-3 font-bold leading-6 transition-colors group-hover:text-primary">{job.query}</p>
                   <p className="mt-1 text-xs text-muted-foreground">B站 · {job.analysis_mode === 'deep' ? '内容深度分析' : '标准分析'} · 进度 {job.progress}%</p>
                 </Link>
-                <div className="flex flex-wrap gap-2">{['failed', 'cancelled'].includes(job.status) && <Button variant="secondary" size="sm" onClick={() => retry(job.id)}>重试</Button>}<Button variant="ghost" size="sm" className="text-destructive hover:bg-destructive/10 hover:text-destructive" onClick={() => remove(job.id)}>删除</Button></div>
+                <div className="grid justify-items-start gap-2 sm:justify-items-end"><div className="flex flex-wrap gap-2">{job.can_retry && <Button variant="secondary" size="sm" onClick={() => retry(job.id)} isLoading={retryingId === job.id}>重试</Button>}<Button variant="ghost" size="sm" className="text-destructive hover:bg-destructive/10 hover:text-destructive" onClick={() => remove(job.id)} disabled={retryingId === job.id}>删除</Button></div>{retryErrors[job.id] && <p className="max-w-xs text-sm text-destructive" role="alert">{retryErrors[job.id]}</p>}</div>
               </div>
             </Card>
           ))}

@@ -130,6 +130,9 @@ Worker 每分钟执行一次有限批量扫描，只租约超过安全阈值的 
 
 - Migration `20260723_0003_interactive_vnext_b.py` 增加 `revision_of_job_id`、`dispatch_pending_at`、外键和派发扫描索引。
 - API 增加 `POST /jobs/{job_id}/revisions`；澄清读取继续使用原路径，但明确返回 `current` 与 `history`。
+- `JobRead.can_retry` 由服务端统一计算：仅 `failed`、`cancelled`、`partial` 且不存在 pending clarification 时为 true；retry 接口复用同一规则。
+- `JobRead.can_revise` 表示 Job 状态可作为修订来源：`waiting_user`、`failed`、`cancelled`、`completed`、`partial` 为 true；用量和 ASR 能力仍由提交接口最终校验。
+- 两个能力都是响应层计算值，不新增数据库布尔列。前端只依据能力显示操作；后端仍是并发和状态变化的最终防线。
 - 审计事件增加 `scope_revision_created`、`scope_revision_started`、`dispatch_recovery_started`、`dispatch_recovered`、`dispatch_recovery_failed`。
 - `DISPATCH_RECONCILE_MIN_AGE_SECONDS` 默认 60 秒，`DISPATCH_RECONCILE_BATCH_SIZE` 默认 50；Worker 每分钟扫描一次，不忙等待。
 

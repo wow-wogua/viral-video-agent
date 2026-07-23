@@ -24,6 +24,8 @@ export default function JobPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [answerError, setAnswerError] = useState('');
+  const [retryError, setRetryError] = useState('');
+  const [retrying, setRetrying] = useState(false);
   const [showRevision, setShowRevision] = useState(revisionMode);
   const [revisionQuery, setRevisionQuery] = useState('');
   const [revisionError, setRevisionError] = useState('');
@@ -58,7 +60,19 @@ export default function JobPage() {
   }, [load]);
 
   const cancel = async () => { setJob(await cancelJob(id)); await load(); };
-  const retry = async () => { const updated = await retryJob(id); router.replace(`/jobs/${updated.id}`); };
+  const retry = async () => {
+    setRetrying(true);
+    setRetryError('');
+    try {
+      const updated = await retryJob(id);
+      router.replace(`/jobs/${updated.id}`);
+    } catch (err) {
+      setRetryError(readableError(err));
+      await load();
+    } finally {
+      setRetrying(false);
+    }
+  };
   const openRevision = () => { if (!job) return; setRevisionQuery(job.query); setRevisionError(''); setShowRevision(true); };
   const revise = async () => {
     if (!job || !revisionQuery.trim() || revisionQuery.trim() === job.query.trim()) return;
@@ -102,12 +116,12 @@ export default function JobPage() {
             <Link href="/history" className="inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"><ArrowLeft className="h-4 w-4" aria-hidden="true" />返回任务列表</Link>
             <div className="mt-4 grid gap-5 border-b pb-7 sm:grid-cols-[1fr_auto] sm:items-start">
               <div className="min-w-0"><p className="eyebrow">Live job / {job.id.slice(0, 6)}</p><h1 className="break-content title-balance mt-2 text-2xl font-black tracking-[-.035em] sm:text-3xl">{job.query}</h1><div className="mt-4 flex flex-wrap items-center gap-3"><StatusBadge status={job.status} /><span className="font-mono text-xs tabular-nums text-muted-foreground">进度 {job.progress}%</span><span className="text-xs text-muted-foreground">B站 · {job.analysis_mode === 'deep' ? '内容深度分析' : '标准分析'}</span></div></div>
-              <div className="flex flex-wrap gap-2">{['pending', 'running', 'waiting_user'].includes(job.status) && <Button variant="danger" size="sm" onClick={cancel}><Square className="h-3.5 w-3.5" aria-hidden="true" />取消任务</Button>}{['failed', 'cancelled'].includes(job.status) && <Button size="sm" onClick={retry}><RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />重新分析</Button>}{['waiting_user', 'failed', 'cancelled', 'completed', 'partial'].includes(job.status) && <Button variant="secondary" size="sm" onClick={openRevision}><PencilLine className="h-3.5 w-3.5" aria-hidden="true" />修改范围</Button>}</div>
+              <div className="grid justify-items-start gap-2 sm:justify-items-end"><div className="flex flex-wrap gap-2">{['pending', 'running', 'waiting_user'].includes(job.status) && <Button variant="danger" size="sm" onClick={cancel}><Square className="h-3.5 w-3.5" aria-hidden="true" />取消任务</Button>}{job.can_retry && <Button size="sm" onClick={retry} isLoading={retrying}><RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />重新分析</Button>}{job.can_revise && <Button variant="secondary" size="sm" onClick={openRevision}><PencilLine className="h-3.5 w-3.5" aria-hidden="true" />修改范围</Button>}</div>{retryError && <p className="max-w-sm text-sm text-destructive" role="alert">{retryError}</p>}</div>
             </div>
 
             {job.revision_of_job_id && <p className="mt-4 text-sm text-muted-foreground">修订自 <Link href={`/jobs/${job.revision_of_job_id}`} className="font-mono font-semibold text-foreground underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{job.revision_of_job_id.slice(0, 8)}</Link></p>}
 
-            {showRevision && ['waiting_user', 'failed', 'cancelled', 'completed', 'partial'].includes(job.status) && (
+            {showRevision && job.can_revise && (
               <Card className="mt-6 p-5 sm:p-6">
                 <p className="eyebrow">范围修订</p>
                 <h2 className="mt-2 text-lg font-bold">创建修订任务</h2>
