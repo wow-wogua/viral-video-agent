@@ -113,11 +113,4 @@ class BriefValidator:
             # Provider/network failures must not turn an ambiguous brief into a broad search.
             decision = conservative_clarification(round_number)
 
-        if decision.need_clarification and round_number >= 2:
-            return BriefDecision(
-                need_clarification=False,
-                verification="达到两轮澄清上限，使用保守假设继续。",
-                topic_spec=conservative_topic_spec(query, history),
-                confidence=0.4,
-            )
         return decision

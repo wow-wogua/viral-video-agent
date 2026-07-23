@@ -83,16 +83,17 @@ export default function JobPage() {
             {job.status === 'waiting_user' && clarification && (
               <Card className="mt-6 p-5 sm:p-6">
                 <p className="eyebrow">补充范围 · {clarification.round}/2</p>
-                <h2 className="mt-2 text-lg font-bold">{clarification.question}</h2>
-                <div className="mt-4 grid gap-2">
+                <h2 id="clarification-question" className="mt-2 text-lg font-bold">{clarification.question}</h2>
+                <fieldset className="mt-4 grid gap-2" aria-labelledby="clarification-question">
+                  <legend className="sr-only">选择研究范围</legend>
                   {clarification.options.map((option) => (
                     <label key={option.id} className="flex cursor-pointer gap-3 rounded-lg border p-3 hover:border-primary/40">
                       <input type="radio" name="clarification" value={option.id} checked={selectedOption === option.id} onChange={() => setSelectedOption(option.id)} className="mt-1 accent-primary" />
                       <span><strong className="block text-sm">{option.label}</strong><span className="mt-0.5 block text-xs leading-5 text-muted-foreground">{option.description}</span></span>
                     </label>
                   ))}
-                </div>
-                {clarification.allow_custom && <Textarea className="mt-3 min-h-20" maxLength={2000} value={customAnswer} onChange={(event) => setCustomAnswer(event.target.value)} placeholder="补充说明（可选）" />}
+                </fieldset>
+                {clarification.allow_custom && <><label htmlFor="clarification-custom-answer" className="sr-only">补充说明（可选）</label><Textarea id="clarification-custom-answer" className="mt-3 min-h-20" maxLength={2000} value={customAnswer} onChange={(event) => setCustomAnswer(event.target.value)} placeholder="补充说明（可选）" /></>}
                 {answerError && <p className="mt-2 text-sm text-destructive" role="alert">{answerError}</p>}
                 <Button className="mt-3" onClick={answer} isLoading={submitting} disabled={!selectedOption && !customAnswer.trim()}>提交并继续</Button>
               </Card>

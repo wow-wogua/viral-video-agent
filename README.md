@@ -275,7 +275,7 @@ cd ..
 docker compose config --quiet
 ```
 
-当前 vNext-A 分支：72 条 Python 测试，其中新增 10 条交互式澄清闭环测试，并保留冻结 B 站产品输入与可选 Researcher 路由回归；历史 MVP 记录见 [2026-07-13 验收文档](docs/validation-20260713.md)，Worker 接入记录见 [2026-07-20 验证文档](docs/researcher-finetuned-worker-integration-20260720.md)。
+当前 vNext-A 分支：76 条 Python 测试，其中 14 条交互式澄清闭环测试覆盖提交后入队、队列失败恢复、取消/执行版本并发和真实两轮上限，并保留冻结 B 站产品输入与可选 Researcher 路由回归；历史 MVP 记录见 [2026-07-13 验收文档](docs/validation-20260713.md)，Worker 接入记录见 [2026-07-20 验证文档](docs/researcher-finetuned-worker-integration-20260720.md)。
 
 ### 真实 API 冒烟（2026-07-13）
 

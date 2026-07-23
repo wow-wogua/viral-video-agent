@@ -10,12 +10,42 @@ from src.api.schemas import JobCreate, JobEventRead, JobRead
 from src.auth.dependencies import get_current_user
 from src.briefing.schemas import ClarificationAnswer, ClarificationRead
 from src.config import USER_MONTHLY_JOB_LIMIT
-from src.db.models import JobEvent, User
+from src.db.models import AnalysisJob, JobEvent, User
 from src.db.session import get_db
 from src.queue import JobQueue, get_job_queue
 from src.repositories import JobRepository, ReportRepository
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
+
+
+async def _mark_enqueue_failed(db: AsyncSession, job_id: uuid.UUID, execution_version: int) -> None:
+    repo = JobRepository(db)
+    job = await repo.get_for_update(job_id)
+    if job and job.execution_version == execution_version and job.status == "pending":
+        job.status = "failed"
+        job.error_code = "WORKER_FAILED"
+        job.error_message = ERROR_MESSAGES["WORKER_FAILED"]
+        db.add(JobEvent(job_id=job.id, event_type="failed", message=job.error_message, progress=job.progress, level="error"))
+        await db.commit()
+        return
+    await db.rollback()
+
+
+async def _enqueue_committed_job(db: AsyncSession, queue: JobQueue, job_id: uuid.UUID, execution_version: int) -> AnalysisJob | None:
+    try:
+        arq_job_id = await queue.enqueue(str(job_id), execution_version)
+    except Exception:
+        await _mark_enqueue_failed(db, job_id, execution_version)
+        raise
+
+    repo = JobRepository(db)
+    job = await repo.get_for_update(job_id)
+    if job and job.execution_version == execution_version:
+        job.arq_job_id = arq_job_id
+        await db.commit()
+        return job
+    await db.rollback()
+    return job
 
 
 async def require_job(job_id: uuid.UUID, user: User, db: AsyncSession):
@@ -118,14 +148,15 @@ async def answer_clarification(
     job.error_code = None
     job.error_message = None
     job.execution_version += 1
-    try:
-        job.arq_job_id = await queue.enqueue(str(job.id), job.execution_version)
-    except Exception as exc:
-        await db.rollback()
-        raise AppError(503, "WORKER_FAILED", ERROR_MESSAGES["WORKER_FAILED"]) from exc
+    job.arq_job_id = None
+    execution_version = job.execution_version
     db.add(JobEvent(job_id=job.id, event_type="clarification_answered", message="已收到研究范围补充，任务将重新判断范围。", progress=job.progress, level="info"))
     await db.commit()
-    return job
+    try:
+        scheduled_job = await _enqueue_committed_job(db, queue, job.id, execution_version)
+    except Exception as exc:
+        raise AppError(503, "WORKER_FAILED", ERROR_MESSAGES["WORKER_FAILED"]) from exc
+    return scheduled_job or job
 
 
 @router.post("/{job_id}/cancel", response_model=JobRead)
@@ -141,20 +172,28 @@ async def cancel_job(job_id: uuid.UUID, user: User = Depends(get_current_user), 
 
 @router.post("/{job_id}/retry", response_model=JobRead, status_code=202)
 async def retry_job(job_id: uuid.UUID, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db), queue: JobQueue = Depends(get_job_queue)):
-    job = await require_job(job_id, user, db)
+    repo = JobRepository(db)
+    job = await repo.get_owned_for_update(job_id, user.id)
+    if not job:
+        raise AppError(404, "JOB_NOT_FOUND", ERROR_MESSAGES["JOB_NOT_FOUND"])
     if job.status not in {"failed", "cancelled", "partial"}:
         raise AppError(409, "JOB_NOT_RETRYABLE", ERROR_MESSAGES["JOB_NOT_RETRYABLE"])
-    if await JobRepository(db).pending_clarification(job.id):
+    if await repo.pending_clarification(job.id):
         raise AppError(409, "JOB_NOT_RETRYABLE", ERROR_MESSAGES["JOB_NOT_RETRYABLE"])
-    await JobRepository(db).clear_outputs(job.id)
+    await repo.clear_outputs(job.id)
     set_committed_value(job, "reports", [])
     job.retry_count += 1
     job.execution_version += 1
     job.status, job.progress, job.error_code, job.error_message, job.cancelled_at = "pending", 0, None, None, None
-    job.arq_job_id = await queue.enqueue(str(job.id), job.execution_version)
-    await JobRepository(db).save(job)
-    await JobRepository(db).add_event(job.id, "queued", f"任务已重新入队（第 {job.retry_count} 次重试）。", 0)
-    return job
+    job.arq_job_id = None
+    execution_version = job.execution_version
+    db.add(JobEvent(job_id=job.id, event_type="queued", message=f"任务已重新入队（第 {job.retry_count} 次重试）。", progress=0, level="info"))
+    await db.commit()
+    try:
+        scheduled_job = await _enqueue_committed_job(db, queue, job.id, execution_version)
+    except Exception as exc:
+        raise AppError(503, "WORKER_FAILED", ERROR_MESSAGES["WORKER_FAILED"]) from exc
+    return scheduled_job or job
 
 
 @router.delete("/{job_id}", status_code=204)

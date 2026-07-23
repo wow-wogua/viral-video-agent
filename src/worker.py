@@ -59,7 +59,7 @@ async def _invoke_graph(job_id: uuid.UUID, user_id: uuid.UUID, query: str, platf
         await asyncio.sleep(1.5)
         async with async_session_factory() as db:
             current = await JobRepository(db).get(job_id)
-            if not current or current.status == "cancelled":
+            if not current or current.status == "cancelled" or current.execution_version != execution_version:
                 task.cancel()
                 raise asyncio.CancelledError
     return await task
@@ -148,11 +148,15 @@ async def run_analysis_job(ctx: dict, job_id_value: str, execution_version_value
     try:
         topic_spec = None
         if ENABLE_INTERACTIVE_BRIEF:
-            brief_result = await validate_job_brief(job_id)
+            brief_result = await validate_job_brief(job_id, expected_execution_version=execution_version)
             if not brief_result.ready:
                 return
             topic_spec = brief_result.topic_spec.model_dump(mode="json") if brief_result.topic_spec else None
             cost_tracker.reset()
+            async with async_session_factory() as db:
+                current = await JobRepository(db).get(job_id)
+                if not current or current.status != "running" or current.execution_version != execution_version:
+                    return
         await _event(job_id, "collecting", "正在采集B站数据并检索知识库。", 15, redis=redis)
         async with ctx["provider_semaphore"]:
             result = await asyncio.wait_for(_invoke_graph(job_id, user_id, query, platforms, topic_spec, execution_version), timeout=JOB_TIMEOUT_SECONDS)

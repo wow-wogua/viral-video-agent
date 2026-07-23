@@ -4,10 +4,11 @@ import uuid
 from sqlalchemy import select
 
 from src.briefing.schemas import BriefDecision, TopicSpec
-from src.briefing.validator import BriefValidator
+from src.briefing.validator import BriefValidator, conservative_topic_spec
 from src.db.models import AnalysisJob, JobClarification, JobEvent
 from src.db.session import async_session_factory
 from src.gateway.cost_tracker import cost_tracker
+from src.repositories import JobRepository
 
 
 MAX_CLARIFICATION_ROUNDS = 2
@@ -39,17 +40,27 @@ async def _history(db, job_id: uuid.UUID) -> list[JobClarification]:
     return list(result.all())
 
 
-async def validate_job_brief(job_id: uuid.UUID, validator: BriefValidator | None = None) -> BriefValidationResult:
+async def validate_job_brief(
+    job_id: uuid.UUID,
+    validator: BriefValidator | None = None,
+    expected_execution_version: int | None = None,
+) -> BriefValidationResult:
     validator = validator or BriefValidator()
     async with async_session_factory() as db:
         job = await db.get(AnalysisJob, job_id)
-        if not job:
+        if not job or job.status != "running":
+            return BriefValidationResult(ready=False)
+        execution_version = job.execution_version if expected_execution_version is None else expected_execution_version
+        if job.execution_version != execution_version:
             return BriefValidationResult(ready=False)
         if job.topic_spec:
             return BriefValidationResult(ready=True, topic_spec=TopicSpec.model_validate(job.topic_spec))
 
         history_rows = await _history(db, job_id)
+        if any(item.status == "pending" for item in history_rows):
+            return BriefValidationResult(ready=False)
         next_round = len(history_rows) + 1
+        query = job.query
         prompt_history = [
             {
                 "round": item.round,
@@ -60,9 +71,32 @@ async def validate_job_brief(job_id: uuid.UUID, validator: BriefValidator | None
             for item in history_rows
             if item.status == "answered"
         ]
-        decision = await validator.validate(job.query, prompt_history, next_round)
-        usage = _merge_usage(job.interaction_usage, cost_tracker.get_summary())
-        job.interaction_usage = usage
+
+    usage: dict | None = None
+    if len(history_rows) >= MAX_CLARIFICATION_ROUNDS:
+        topic_spec = conservative_topic_spec(query, prompt_history)
+        decision = BriefDecision(
+            need_clarification=False,
+            verification="达到两轮澄清上限，使用保守假设继续。",
+            topic_spec=topic_spec,
+            confidence=topic_spec.confidence,
+        )
+    else:
+        decision = await validator.validate(query, prompt_history, next_round)
+        usage = cost_tracker.get_summary()
+
+    async with async_session_factory() as db:
+        job = await JobRepository(db).get_for_update(job_id)
+        if not job:
+            return BriefValidationResult(ready=False)
+        if usage is not None:
+            job.interaction_usage = _merge_usage(job.interaction_usage, usage)
+        if job.execution_version != execution_version or job.status != "running":
+            await db.commit()
+            return BriefValidationResult(ready=False)
+        if job.topic_spec:
+            await db.commit()
+            return BriefValidationResult(ready=True, topic_spec=TopicSpec.model_validate(job.topic_spec))
 
         if decision.need_clarification and next_round <= MAX_CLARIFICATION_ROUNDS:
             request = JobClarification(
@@ -94,9 +128,7 @@ async def validate_job_brief(job_id: uuid.UUID, validator: BriefValidator | None
         if topic_spec is None:
             # This is defensive for a future validator implementation; it preserves the
             # narrow-scope guarantee after the two-round cap.
-            from src.briefing.validator import conservative_topic_spec
-
-            topic_spec = conservative_topic_spec(job.query, prompt_history)
+            topic_spec = conservative_topic_spec(query, prompt_history)
         job.topic_spec = topic_spec.model_dump(mode="json")
         db.add(JobEvent(
             job_id=job.id,
